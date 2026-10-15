@@ -12,20 +12,20 @@ const reader = (config, log = '') => async (path) => {
 };
 
 for (const [name, config, log, status, text, tone] of [
-  ['disabled', '{"enabled":false}', '', 'off', 'DR off', 'off'],
-  ['missing config', fail('ENOENT'), '', 'config-unreadable', 'DR: конфиг недоступен', 'warn'],
-  ['unreadable config', fail('EACCES'), '', 'config-unreadable', 'DR: конфиг недоступен', 'warn'],
-  ['invalid JSON', '{secret', '', 'config-invalid', 'DR: ошибка конфига', 'warn'],
-  ['null config', 'null', '', 'config-invalid', 'DR: ошибка конфига', 'warn'],
-  ['array config', '[]', '', 'config-invalid', 'DR: ошибка конфига', 'warn'],
-  ['invalid enabled', '{"enabled":"true"}', '', 'config-invalid', 'DR: ошибка конфига', 'warn'],
-  ['missing logFile', '{}', '', 'log-unconfigured', 'DR: logFile не задан', 'warn'],
-  ['blank logFile', '{"logFile":"  "}', '', 'log-unconfigured', 'DR: logFile не задан', 'warn'],
-  ['missing log', '{"logFile":"log"}', fail('ENOENT'), 'log-missing', 'DR: ожидание решения · нет лога', 'off'],
-  ['unreadable log', '{"logFile":"log"}', fail('EACCES'), 'log-unreadable', 'DR: лог недоступен', 'warn'],
-  ['empty log', '{"logFile":"log"}', '', 'ready', 'DR: ожидание решения', 'off'],
-  ['foreign session', '{"logFile":"log"}', JSON.stringify({ ...entry, sessionID: 'b' }), 'ready', 'DR: ожидание решения', 'off'],
-  ['malformed lines', '{"logFile":"log"}', '{truncated', 'ready', 'DR: ожидание решения', 'off'],
+  ['disabled', '{"enabled":false}', '', 'off', 'DR · выкл', 'off'],
+  ['missing config', fail('ENOENT'), '', 'config-unreadable', 'DR · конфиг недоступен', 'warn'],
+  ['unreadable config', fail('EACCES'), '', 'config-unreadable', 'DR · конфиг недоступен', 'warn'],
+  ['invalid JSON', '{secret', '', 'config-invalid', 'DR · ошибка конфига', 'warn'],
+  ['null config', 'null', '', 'config-invalid', 'DR · ошибка конфига', 'warn'],
+  ['array config', '[]', '', 'config-invalid', 'DR · ошибка конфига', 'warn'],
+  ['invalid enabled', '{"enabled":"true"}', '', 'config-invalid', 'DR · ошибка конфига', 'warn'],
+  ['missing logFile', '{}', '', 'log-unconfigured', 'DR · лог не задан', 'warn'],
+  ['blank logFile', '{"logFile":"  "}', '', 'log-unconfigured', 'DR · лог не задан', 'warn'],
+  ['missing log', '{"logFile":"log"}', fail('ENOENT'), 'log-missing', 'DR · ожидание', 'off'],
+  ['unreadable log', '{"logFile":"log"}', fail('EACCES'), 'log-unreadable', 'DR · лог недоступен', 'warn'],
+  ['empty log', '{"logFile":"log"}', '', 'ready', 'DR · ожидание', 'off'],
+  ['foreign session', '{"logFile":"log"}', JSON.stringify({ ...entry, sessionID: 'b' }), 'ready', 'DR · ожидание', 'off'],
+  ['malformed lines', '{"logFile":"log"}', '{truncated', 'ready', 'DR · ожидание', 'off'],
 ]) {
   test(`read state: ${name}`, async () => {
     const state = await readRouterState('config', 'a', reader(config, log));
@@ -43,7 +43,7 @@ test('unset config is off without reading any files', async () => {
 test('successful read selects session and never invents confidence', async () => {
   const state = await readRouterState('config', 'a', reader('{"logFile":"log"}', `${JSON.stringify(entry)}\n{partial`));
   assert.deepEqual(state.entry, entry);
-  assert.equal(formatIndicator(state.entry, state).text, 'DR light→omniroute/light (0.8s)');
+  assert.equal(formatIndicator(state.entry, state).text, 'DR · агент неизвестен → light');
 });
 
 test('monitor clears on session switch, rejects stale reads and stops publishing after cleanup', async () => {

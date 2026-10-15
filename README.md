@@ -128,12 +128,14 @@ The package also ships a TUI plugin (`export "./tui"`) that renders the latest
 routing decision for the current session in the OpenCode status footer
 (`prompt.footer.status` slot):
 
-- `DR light→omniroute/light (0.8s)` — latest logged classification (the current server log does not include confidence);
-- `DR fallback: keep omniroute/heavy (timeout)` — original model kept;
-- `DR off` (muted) — `OPENCODE_DECISION_ROUTER_CONFIG` is not set, or the referenced config has `enabled: false`;
-- `DR: ожидание решения` (muted) — no logged decision for this session yet;
-- `DR: ожидание решения · нет лога` (muted) — the log does not exist yet; this is not treated as a server failure;
-- `DR: конфиг недоступен`, `DR: ошибка конфига`, `DR: logFile не задан`, or `DR: лог недоступен` (warning) — local read/config diagnostics, without paths or error bodies.
+- `DR · librarian → heavy` / `DR · explorer → light` — latest logged agent and chosen model class, without provider/model paths, confidence, or latency;
+- `DR · fixer · fallback` (warning) — classification fell back; no kept model is claimed from absent metadata;
+- `DR · выкл` (muted) — `OPENCODE_DECISION_ROUTER_CONFIG` is not set, or the referenced config has `enabled: false`;
+- `DR · ожидание` (muted) — no logged decision for this session yet, including a log not created yet;
+- `DR · конфиг недоступен`, `DR · ошибка конфига`, `DR · лог не задан`, or `DR · лог недоступен` (warning) — actual local read/config diagnostics, without paths or error bodies.
+
+Older entries without an agent use `агент неизвестен` rather than inferring one.
+Only the last decision is shown; color is secondary to the text.
 
 The indicator remains visible before the first decision. Local environment/config
 presence is **not** proof that the server router is active. Session changes clear
@@ -141,12 +143,14 @@ the previous decision immediately; an older asynchronous read cannot restore it.
 
 It reads the `logFile` from the env-referenced config, refreshes on session
 lifecycle events plus a 2 s poll, and cleans up (slot, listeners, interval) on
-dispose. Registration is already covered by the existing plugin entry — the
-host loads both `.` and `./tui` exports; only the build step is needed:
+dispose. The package exposes a separate `./tui` entry. Build it with:
 
+```sh
+cd tui && bun run build
 ```
-npm run build -w tui
-```
+
+Build and automated checks do not prove that the client loaded this entry or
+rendered the slot. Actual loaded TUI/footer display still needs a separate visual check.
 
 Indicator formatting and injected read/session-state logic live in
 `tui/src/format.js` and `tui/src/read-state.js`, covered by

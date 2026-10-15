@@ -82,43 +82,63 @@ test('tailText: keeps only last lines', () => {
   assert.deepEqual(tail.split('\n'), ['l7', 'l8', 'l9']);
 });
 
-test('formatIndicator: routed entry shows choice, model, latency', () => {
+test('formatIndicator: routed entry shows only agent and choice', () => {
   const r = formatIndicator(routedEntry, { enabled: true });
-  assert.equal(r.text, 'DR light→omniroute/light (0.8s)');
+  assert.equal(r.text, 'DR · build → light');
   assert.equal(r.tone, 'ok');
 });
 
-test('formatIndicator: confidence included as percent when present', () => {
+test('formatIndicator: confidence and latency are omitted even when present', () => {
   const r = formatIndicator({ ...routedEntry, confidence: 0.98 }, { enabled: true });
-  assert.equal(r.text, 'DR light→omniroute/light (98%, 0.8s)');
+  assert.equal(r.text, 'DR · build → light');
 });
 
 test('formatIndicator: fallback entry', () => {
   const r = formatIndicator({ ...routedEntry, routed: false, reason: 'timeout', model: 'omniroute/heavy', latencyMs: 2000 }, { enabled: true });
-  assert.equal(r.text, 'DR fallback: keep omniroute/heavy (timeout)');
+  assert.equal(r.text, 'DR · build · fallback');
   assert.equal(r.tone, 'warn');
 });
 
-test('formatIndicator: fallback without model uses generic label', () => {
+test('formatIndicator: fallback without model never invents a kept model', () => {
   const entry = { ...routedEntry, routed: false, reason: 'no-api-key' };
   delete entry.model;
   const r = formatIndicator(entry, { enabled: true });
-  assert.equal(r.text, 'DR fallback: keep model (no-api-key)');
+  assert.equal(r.text, 'DR · build · fallback');
 });
 
 test('formatIndicator: off state is gray text regardless of entries', () => {
   const r = formatIndicator(routedEntry, { enabled: false });
-  assert.equal(r.text, 'DR off');
+  assert.equal(r.text, 'DR · выкл');
   assert.equal(r.tone, 'off');
 });
 
 test('formatIndicator: no entry while enabled keeps a neutral pending indicator', () => {
   const r = formatIndicator(null, { enabled: true });
-  assert.equal(r.text, 'DR: ожидание решения');
+  assert.equal(r.text, 'DR · ожидание');
   assert.equal(r.tone, 'off');
 });
 
-test('formatIndicator: missing latency omits seconds', () => {
+for (const [agent, choice] of [['librarian', 'heavy'], ['explorer', 'light']]) {
+  test(`formatIndicator: compact ${agent} choice without metadata`, () => {
+    const result = formatIndicator({ ...routedEntry, agent, choice, confidence: 0.98 });
+    assert.deepEqual(result, { text: `DR · ${agent} → ${choice}`, tone: 'ok' });
+    assert.doesNotMatch(result.text, /omniroute|%|812|classified/);
+  });
+}
+
+test('formatIndicator: fixer fallback is honest without model metadata', () => {
+  assert.deepEqual(formatIndicator({ agent: 'fixer', routed: false, reason: 'timeout' }),
+    { text: 'DR · fixer · fallback', tone: 'warn' });
+});
+
+for (const agent of [undefined, null, '', '   ', 42]) {
+  test(`formatIndicator: missing or invalid agent ${JSON.stringify(agent)} is neutral`, () => {
+    assert.equal(formatIndicator({ ...routedEntry, agent }).text, 'DR · агент неизвестен → light');
+    assert.equal(formatIndicator({ ...routedEntry, agent, routed: false }).text, 'DR · агент неизвестен · fallback');
+  });
+}
+
+test('formatIndicator: missing latency does not change compact text', () => {
   const r = formatIndicator({ ...routedEntry, latencyMs: null }, { enabled: true });
-  assert.equal(r.text, 'DR light→omniroute/light');
+  assert.equal(r.text, 'DR · build → light');
 });

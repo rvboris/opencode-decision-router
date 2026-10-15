@@ -53,17 +53,6 @@ export function tailText(text, maxLines = 200) {
   return lines.slice(Math.max(0, lines.length - maxLines)).join('\n');
 }
 
-function formatSeconds(latencyMs) {
-  if (typeof latencyMs !== 'number' || !Number.isFinite(latencyMs)) return null;
-  return `${(latencyMs / 1000).toFixed(1)}s`;
-}
-
-function formatPercent(confidence) {
-  if (typeof confidence !== 'number' || !Number.isFinite(confidence)) return null;
-  const pct = confidence <= 1 ? confidence * 100 : confidence;
-  return `${Math.round(pct)}%`;
-}
-
 /**
  * Format the indicator for one session.
  *
@@ -72,24 +61,24 @@ function formatPercent(confidence) {
  * @returns {{ text: string, tone: 'ok'|'warn'|'off' }} always-visible status
  */
 export function formatIndicator(entry, state = {}) {
-  if (state.enabled === false) return { text: 'DR off', tone: 'off' };
+  if (state.enabled === false) return { text: 'DR · выкл', tone: 'off' };
   const statuses = {
-    off: ['DR off', 'off'],
-    pending: ['DR: ожидание решения', 'off'],
-    'config-unreadable': ['DR: конфиг недоступен', 'warn'],
-    'config-invalid': ['DR: ошибка конфига', 'warn'],
-    'log-unconfigured': ['DR: logFile не задан', 'warn'],
-    'log-missing': ['DR: ожидание решения · нет лога', 'off'],
-    'log-unreadable': ['DR: лог недоступен', 'warn'],
+    off: ['DR · выкл', 'off'],
+    pending: ['DR · ожидание', 'off'],
+    'config-unreadable': ['DR · конфиг недоступен', 'warn'],
+    'config-invalid': ['DR · ошибка конфига', 'warn'],
+    'log-unconfigured': ['DR · лог не задан', 'warn'],
+    'log-missing': ['DR · ожидание', 'off'],
+    'log-unreadable': ['DR · лог недоступен', 'warn'],
   };
   const diagnostic = statuses[state.status];
   if (diagnostic) return { text: diagnostic[0], tone: diagnostic[1] };
-  if (!entry) return { text: 'DR: ожидание решения', tone: 'off' };
+  if (!entry) return { text: 'DR · ожидание', tone: 'off' };
+  // Older entries may omit the agent. Never infer it from the model or session.
+  const agent = typeof entry.agent === 'string' && entry.agent.trim()
+    ? entry.agent.trim() : 'агент неизвестен';
   if (entry.routed) {
-    const parts = [formatPercent(entry.confidence), formatSeconds(entry.latencyMs)].filter(Boolean);
-    const detail = parts.length ? ` (${parts.join(', ')})` : '';
-    return { text: `DR ${entry.choice}→${entry.model}${detail}`, tone: 'ok' };
+    return { text: `DR · ${agent} → ${entry.choice}`, tone: 'ok' };
   }
-  const kept = typeof entry.model === 'string' && entry.model.length > 0 ? entry.model : 'model';
-  return { text: `DR fallback: keep ${kept} (${entry.reason})`, tone: 'warn' };
+  return { text: `DR · ${agent} · fallback`, tone: 'warn' };
 }

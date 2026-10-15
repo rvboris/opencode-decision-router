@@ -64,41 +64,28 @@ function tailText(text, maxLines = 200) {
   return lines.slice(Math.max(0, lines.length - maxLines)).join(`
 `);
 }
-function formatSeconds(latencyMs) {
-  if (typeof latencyMs !== "number" || !Number.isFinite(latencyMs))
-    return null;
-  return `${(latencyMs / 1000).toFixed(1)}s`;
-}
-function formatPercent(confidence) {
-  if (typeof confidence !== "number" || !Number.isFinite(confidence))
-    return null;
-  const pct = confidence <= 1 ? confidence * 100 : confidence;
-  return `${Math.round(pct)}%`;
-}
 function formatIndicator(entry, state = {}) {
   if (state.enabled === false)
-    return { text: "DR off", tone: "off" };
+    return { text: "DR \xB7 \u0432\u044B\u043A\u043B", tone: "off" };
   const statuses = {
-    off: ["DR off", "off"],
-    pending: ["DR: \u043E\u0436\u0438\u0434\u0430\u043D\u0438\u0435 \u0440\u0435\u0448\u0435\u043D\u0438\u044F", "off"],
-    "config-unreadable": ["DR: \u043A\u043E\u043D\u0444\u0438\u0433 \u043D\u0435\u0434\u043E\u0441\u0442\u0443\u043F\u0435\u043D", "warn"],
-    "config-invalid": ["DR: \u043E\u0448\u0438\u0431\u043A\u0430 \u043A\u043E\u043D\u0444\u0438\u0433\u0430", "warn"],
-    "log-unconfigured": ["DR: logFile \u043D\u0435 \u0437\u0430\u0434\u0430\u043D", "warn"],
-    "log-missing": ["DR: \u043E\u0436\u0438\u0434\u0430\u043D\u0438\u0435 \u0440\u0435\u0448\u0435\u043D\u0438\u044F \xB7 \u043D\u0435\u0442 \u043B\u043E\u0433\u0430", "off"],
-    "log-unreadable": ["DR: \u043B\u043E\u0433 \u043D\u0435\u0434\u043E\u0441\u0442\u0443\u043F\u0435\u043D", "warn"]
+    off: ["DR \xB7 \u0432\u044B\u043A\u043B", "off"],
+    pending: ["DR \xB7 \u043E\u0436\u0438\u0434\u0430\u043D\u0438\u0435", "off"],
+    "config-unreadable": ["DR \xB7 \u043A\u043E\u043D\u0444\u0438\u0433 \u043D\u0435\u0434\u043E\u0441\u0442\u0443\u043F\u0435\u043D", "warn"],
+    "config-invalid": ["DR \xB7 \u043E\u0448\u0438\u0431\u043A\u0430 \u043A\u043E\u043D\u0444\u0438\u0433\u0430", "warn"],
+    "log-unconfigured": ["DR \xB7 \u043B\u043E\u0433 \u043D\u0435 \u0437\u0430\u0434\u0430\u043D", "warn"],
+    "log-missing": ["DR \xB7 \u043E\u0436\u0438\u0434\u0430\u043D\u0438\u0435", "off"],
+    "log-unreadable": ["DR \xB7 \u043B\u043E\u0433 \u043D\u0435\u0434\u043E\u0441\u0442\u0443\u043F\u0435\u043D", "warn"]
   };
   const diagnostic = statuses[state.status];
   if (diagnostic)
     return { text: diagnostic[0], tone: diagnostic[1] };
   if (!entry)
-    return { text: "DR: \u043E\u0436\u0438\u0434\u0430\u043D\u0438\u0435 \u0440\u0435\u0448\u0435\u043D\u0438\u044F", tone: "off" };
+    return { text: "DR \xB7 \u043E\u0436\u0438\u0434\u0430\u043D\u0438\u0435", tone: "off" };
+  const agent = typeof entry.agent === "string" && entry.agent.trim() ? entry.agent.trim() : "\u0430\u0433\u0435\u043D\u0442 \u043D\u0435\u0438\u0437\u0432\u0435\u0441\u0442\u0435\u043D";
   if (entry.routed) {
-    const parts = [formatPercent(entry.confidence), formatSeconds(entry.latencyMs)].filter(Boolean);
-    const detail = parts.length ? ` (${parts.join(", ")})` : "";
-    return { text: `DR ${entry.choice}\u2192${entry.model}${detail}`, tone: "ok" };
+    return { text: `DR \xB7 ${agent} \u2192 ${entry.choice}`, tone: "ok" };
   }
-  const kept = typeof entry.model === "string" && entry.model.length > 0 ? entry.model : "model";
-  return { text: `DR fallback: keep ${kept} (${entry.reason})`, tone: "warn" };
+  return { text: `DR \xB7 ${agent} \xB7 fallback`, tone: "warn" };
 }
 
 // src/read-state.js
