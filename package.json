@@ -1,0 +1,19 @@
+{
+  "name": "opencode-decision-router",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "OpenCode V2 plugin: classifies delegated subagent tasks (light/heavy) via a decisions API and routes the child model accordingly. Opt-in via OPENCODE_DECISION_ROUTER_CONFIG.",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./server": "./src/index.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "test": "node --test test/unit/*.test.js"
+  },
+  "license": "MIT"
+}

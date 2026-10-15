@@ -1,0 +1,6 @@
+node_modules/
+artifacts/
+state/
+.env
+.env.*
+*.env

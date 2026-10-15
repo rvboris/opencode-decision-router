@@ -1,0 +1,15 @@
+{
+  "enabled": true,
+  "endpoint": "https://openrouter.ai/api/alpha/decisions",
+  "apiKeyEnv": "OPENROUTER_API_KEY",
+  "apiKeyFile": null,
+  "decisionModel": "microsoft/microsoft-decision-1",
+  "models": {
+    "light": "omniroute/light",
+    "heavy": "omniroute/heavy"
+  },
+  "agents": ["explorer", "librarian", "fixer", "oracle", "designer", "observer"],
+  "timeoutMs": 5000,
+  "maxTaskChars": 4000,
+  "logFile": null
+}
