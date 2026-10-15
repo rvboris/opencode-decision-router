@@ -122,6 +122,29 @@ answer — preserves the event entirely (fail-open). No retries.
   agent, chosen model, fallback reason, latency. Never prompt, key, or
   response body.
 
+## TUI routing indicator
+
+The package also ships a TUI plugin (`export "./tui"`) that renders the latest
+routing decision for the current session in the OpenCode status footer
+(`prompt.footer.status` slot):
+
+- `DR light→omniroute/light (98%, 0.8s)` — successful classification;
+- `DR fallback: keep omniroute/heavy (timeout)` — original model kept;
+- `DR off` (gray) — `OPENCODE_DECISION_ROUTER_CONFIG` is not set;
+- nothing — the router is on but this session has no logged decisions yet.
+
+It reads the `logFile` from the env-referenced config, refreshes on session
+lifecycle events plus a 2 s poll, and cleans up (slot, listeners, interval) on
+dispose. Registration is already covered by the existing plugin entry — the
+host loads both `.` and `./tui` exports; only the build step is needed:
+
+```
+npm run build -w tui
+```
+
+Pure indicator logic lives in `tui/src/format.js` and is unit-tested from
+`test/unit/tui-format.test.js`.
+
 ## Tests
 
 ```sh

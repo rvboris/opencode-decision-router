@@ -1,0 +1,19 @@
+{
+  "name": "@opencode-decision-router/tui",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "bun scripts/build.mjs"
+  },
+  "dependencies": {
+    "@opencode/plugin": "2.0.22",
+    "@opentui/core": "^0.5.14",
+    "@opentui/solid": "^0.5.14",
+    "solid-js": "^1.9.12"
+  }
+}
