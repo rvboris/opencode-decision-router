@@ -112,9 +112,10 @@ test('formatIndicator: off state is gray text regardless of entries', () => {
   assert.equal(r.tone, 'off');
 });
 
-test('formatIndicator: no entry while enabled hides the indicator', () => {
+test('formatIndicator: no entry while enabled keeps a neutral pending indicator', () => {
   const r = formatIndicator(null, { enabled: true });
-  assert.equal(r.text, null);
+  assert.equal(r.text, 'DR: ожидание решения');
+  assert.equal(r.tone, 'off');
 });
 
 test('formatIndicator: missing latency omits seconds', () => {

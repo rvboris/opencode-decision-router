@@ -128,10 +128,16 @@ The package also ships a TUI plugin (`export "./tui"`) that renders the latest
 routing decision for the current session in the OpenCode status footer
 (`prompt.footer.status` slot):
 
-- `DR light→omniroute/light (98%, 0.8s)` — successful classification;
+- `DR light→omniroute/light (0.8s)` — latest logged classification (the current server log does not include confidence);
 - `DR fallback: keep omniroute/heavy (timeout)` — original model kept;
-- `DR off` (gray) — `OPENCODE_DECISION_ROUTER_CONFIG` is not set;
-- nothing — the router is on but this session has no logged decisions yet.
+- `DR off` (muted) — `OPENCODE_DECISION_ROUTER_CONFIG` is not set, or the referenced config has `enabled: false`;
+- `DR: ожидание решения` (muted) — no logged decision for this session yet;
+- `DR: ожидание решения · нет лога` (muted) — the log does not exist yet; this is not treated as a server failure;
+- `DR: конфиг недоступен`, `DR: ошибка конфига`, `DR: logFile не задан`, or `DR: лог недоступен` (warning) — local read/config diagnostics, without paths or error bodies.
+
+The indicator remains visible before the first decision. Local environment/config
+presence is **not** proof that the server router is active. Session changes clear
+the previous decision immediately; an older asynchronous read cannot restore it.
 
 It reads the `logFile` from the env-referenced config, refreshes on session
 lifecycle events plus a 2 s poll, and cleans up (slot, listeners, interval) on
@@ -142,8 +148,9 @@ host loads both `.` and `./tui` exports; only the build step is needed:
 npm run build -w tui
 ```
 
-Pure indicator logic lives in `tui/src/format.js` and is unit-tested from
-`test/unit/tui-format.test.js`.
+Indicator formatting and injected read/session-state logic live in
+`tui/src/format.js` and `tui/src/read-state.js`, covered by
+`test/unit/tui-format.test.js` and `test/unit/tui-read-state.test.js`.
 
 ## Tests
 

@@ -68,12 +68,23 @@ function formatPercent(confidence) {
  * Format the indicator for one session.
  *
  * @param {object|null} entry last matching log entry (or null when none)
- * @param {{enabled?: boolean}} state router enabled state
- * @returns {{ text: string|null, tone: 'ok'|'warn'|'off' }} text null means render nothing
+ * @param {{enabled?: boolean, status?: string}} state local config/log read state
+ * @returns {{ text: string, tone: 'ok'|'warn'|'off' }} always-visible status
  */
 export function formatIndicator(entry, state = {}) {
   if (state.enabled === false) return { text: 'DR off', tone: 'off' };
-  if (!entry) return { text: null, tone: 'ok' };
+  const statuses = {
+    off: ['DR off', 'off'],
+    pending: ['DR: ожидание решения', 'off'],
+    'config-unreadable': ['DR: конфиг недоступен', 'warn'],
+    'config-invalid': ['DR: ошибка конфига', 'warn'],
+    'log-unconfigured': ['DR: logFile не задан', 'warn'],
+    'log-missing': ['DR: ожидание решения · нет лога', 'off'],
+    'log-unreadable': ['DR: лог недоступен', 'warn'],
+  };
+  const diagnostic = statuses[state.status];
+  if (diagnostic) return { text: diagnostic[0], tone: diagnostic[1] };
+  if (!entry) return { text: 'DR: ожидание решения', tone: 'off' };
   if (entry.routed) {
     const parts = [formatPercent(entry.confidence), formatSeconds(entry.latencyMs)].filter(Boolean);
     const detail = parts.length ? ` (${parts.join(', ')})` : '';
