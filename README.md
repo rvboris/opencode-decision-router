@@ -167,6 +167,29 @@ answer — preserves the event entirely (fail-open). No retries.
   agent, chosen model, fallback reason, latency. Never prompt, key, or
   response body.
 
+## TUI routing statistics
+
+Open **Decision Router: статистика** in the native TUI command palette. The separate,
+scrollable dialog leaves the footer unchanged. **Tab** switches between the current
+session and all retained log records; **R** rereads the journal; **↑/↓** scroll;
+**Esc** closes. On the home screen, switch to all records to see statistics.
+
+The panel shows successful decisions, model and model/effort profile counts and
+percentages (one decimal), and agents with their profile breakdowns. Percentages
+use successful decisions only; an agent's profile percentages use that agent's
+successful decisions. Fallback is shown separately. Legacy records without effort
+are marked as unspecified, never inferred from today's configuration.
+
+The full configured JSONL is read locally on open/refresh, not the footer's last
+400 lines. Invalid lines are reported for the whole journal. The all-records view
+means **saved records only**, not all OpenCode history. Skips are not journaled;
+there is no invented skip count, cost, token usage, or upstream-execution claim.
+Loading, disabled, missing-file and read-error states do not expose paths or error
+bodies. Closing or changing sessions prevents an older read from publishing.
+
+Build with `cd tui && bun run build`. Automated checks do not establish that the
+running host has loaded the command; live keyboard/layout checks remain separate.
+
 ## TUI routing indicator
 
 The package also ships a TUI plugin (`export "./tui"`) that renders the latest
