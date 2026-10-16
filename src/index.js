@@ -40,8 +40,11 @@ export function createRouter(config, dependencies = {}) {
     const start = now();
     try {
       // classifyTask's caller signal is combined with its own timeout signal.
-      const choice = await classifyTask(config, task, key.key, { fetchImpl, signal: controller.signal });
-      return { choice, reason: 'classified', latencyMs: now() - start };
+      const selected = await classifyTask(config, task, key.key, { fetchImpl, signal: controller.signal });
+      const profile = config.profiles?.[selected];
+      return { choice: profile ? profile.label : selected,
+        ...(profile ? { profile: selected, effort: profile.effort } : {}),
+        reason: 'classified', latencyMs: now() - start };
     } catch (e) {
       return {
         choice: null,
@@ -70,16 +73,18 @@ export function createRouter(config, dependencies = {}) {
       emit({ ...meta, routed: false, reason: outcome.reason, latencyMs: outcome.latencyMs ?? null });
       return { routed: false, reason: outcome.reason };
     }
-    const target = config.models[outcome.choice];
+    const target = outcome.profile ? config.profiles[outcome.profile].model : config.models[outcome.choice];
+    const selection = { choice: outcome.choice,
+      ...(outcome.profile ? { profile: outcome.profile, effort: outcome.effort } : {}) };
     // Prepare safe metadata/logging before the event mutation. A throwing
     // injected logger must neither block dispatch nor make partial changes.
     const entry = {
-      ...meta, routed: true, reason: outcome.reason, choice: outcome.choice,
+      ...meta, routed: true, reason: outcome.reason, ...selection,
       model: target, latencyMs: outcome.latencyMs ?? null,
     };
     event.input.model = target;
     emit(entry);
-    return { routed: true, choice: outcome.choice, model: target };
+    return { routed: true, ...selection, model: target };
   }
 
   function dispose() {

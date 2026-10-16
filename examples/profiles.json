@@ -1,0 +1,9 @@
+{
+  "enabled": true,
+  "profiles": {
+    "light_medium": { "model": "omniroute/light#medium", "label": "light", "effort": "medium", "description": "Simple, unambiguous operations with an established solution." },
+    "light_high": { "model": "omniroute/light#high", "label": "light", "effort": "high", "description": "Bounded implementation or search requiring reasoning." },
+    "heavy_high": { "model": "omniroute/heavy#high", "label": "heavy", "effort": "high", "description": "Complex implementation, diagnosis, or ambiguous tasks. Prefer this over light when uncertain." },
+    "heavy_xhigh": { "model": "omniroute/heavy#xhigh", "label": "heavy", "effort": "xhigh", "description": "Architecture, security, data integrity, or difficult cross-system decisions. Reserve for tasks needing this depth, not every task." }
+  }
+}

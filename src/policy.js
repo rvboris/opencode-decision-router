@@ -40,7 +40,7 @@ export function evaluateEvent(event, cfg) {
     // Explicit model: only re-classify when it is one of the configured pair
     // (any variant of them counts; other variants/models are preserved).
     const mappedBases = new Set(
-      [cfg.models.light, cfg.models.heavy]
+      (cfg.profiles ? Object.values(cfg.profiles).map(p => p.model) : [cfg.models.light, cfg.models.heavy])
         .map(parseModelId)
         .filter(Boolean)
         .map((id) => id.base),
@@ -61,8 +61,8 @@ export function evaluateEvent(event, cfg) {
 }
 
 /**
- * Validates a decisions API response body. Returns 'light' | 'heavy' or null.
- * Strict: only answers.routing.type === 'choice' with choice light/heavy.
+ * Returns an allowlisted profile ID (profiles mode), legacy light/heavy, or null.
+ * Strict: only answers.routing.type === 'choice' with a configured choice.
  */
 export function validateDecisionResponse(body, cfg) {
   if (!body || typeof body !== 'object') return null;
@@ -72,6 +72,9 @@ export function validateDecisionResponse(body, cfg) {
   if (!routing || typeof routing !== 'object') return null;
   if (routing.type !== 'choice') return null;
   const choice = routing.choice;
+  if (cfg.profiles) {
+    return typeof choice === 'string' && Object.hasOwn(cfg.profiles, choice) ? choice : null;
+  }
   if (choice !== 'light' && choice !== 'heavy') return null;
   const mapped = cfg.models[choice];
   if (typeof mapped !== 'string' || mapped.length === 0) return null;

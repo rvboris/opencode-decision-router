@@ -6,6 +6,14 @@ for(const stream of [true,false])for(const tools of [true,false])test(`transport
  const message=tools?{role:'assistant',content:null,tool_calls:[{id:'call-1',type:'function',function:{name:'subagent',arguments:'{"agent":"fixer"}'}}]}:{role:'assistant',content:'done'};
  const s=await server((b,req,res)=>completion(res,b,message));try{const r=await fetch(s.url,{method:'POST',body:JSON.stringify({stream,model:'heavy'})});const raw=await r.text();if(stream){assert.match(r.headers.get('content-type'),/event-stream/);const chunks=raw.split('\n\n').filter(Boolean).map(x=>x.slice(6));assert.equal(chunks.pop(),'[DONE]');const parsed=chunks.map(JSON.parse);assert.equal(parsed[0].choices[0].delta.role,'assistant');assert.equal(parsed.at(-1).choices[0].finish_reason,tools?'tool_calls':'stop');if(tools)assert.equal(parsed[1].choices[0].delta.tool_calls[0].index,0);}else assert.deepEqual(JSON.parse(raw).choices[0].message,message);}finally{await s.close();}
 });
+test('fixture resume model stays internal and wire effort is captured verbatim',()=>{
+ const w=new Worker('effort',{resumeModel:'mock/heavy#xhigh'});
+ const properties=Object.fromEntries(['agent','prompt','description','model','sessionID','background'].map(x=>[x,{}]));
+ const response=w.respond({messages:[],tools:[{function:{name:'subagent',parameters:{properties}}}]});
+ assert.equal(Object.hasOwn(JSON.parse(response.tool_calls[0].function.arguments),'resumeModel'),false);
+ w.respond({model:'heavy',reasoning_effort:'xhigh',messages:[{role:'user',content:'CHILD_effort'}]});
+ assert.equal(w.rows.at(-1).reasoning_effort,'xhigh');
+});
 test('real Decisions validator accepts fixture, rejects chat envelope',()=>{const cfg={models:{light:'mock/light',heavy:'mock/heavy'}};assert.equal(validateDecisionResponse(decision('light'),cfg),'light');assert.equal(validateDecisionResponse(decision('bad'),cfg),null);assert.equal(validateDecisionResponse({choices:[]},cfg),null);});
 test('aux does not consume FSM; historical child marker in result remains parent',()=>{const w=new Worker('x');w.respond({messages:[{role:'user',content:'parent'}]});assert.equal(w.phase,'initial');const properties=Object.fromEntries(['agent','prompt','description','model','sessionID','background'].map(x=>[x,{}]));w.respond({messages:[],tools:[{function:{name:'subagent',parameters:{properties}}}]});assert.equal(w.phase,'delegated');w.respond({messages:[{role:'tool',tool_call_id:'call-x',content:'CHILD_x'}]});assert.equal(w.rows.at(-1).role,'parent-result');assert.equal(w.phase,'final');});
 test('wire normalization retains unexpected model',()=>{assert.equal(wire('mock/light'),'light');assert.notEqual(wire('mock/heavy'),'light');});

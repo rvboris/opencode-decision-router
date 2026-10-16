@@ -46,7 +46,7 @@ export class Worker {
     const native=(b.tools??[]).find(t=>t.function?.name==='subagent');
     const role=child?'child':result?'parent-result':native?'parent':'auxiliary';
     this.toolSchemas=b.tools??this.toolSchemas;
-    const row={role,model:b.model,stream:b.stream,tools:(b.tools??[]).map(t=>t.function?.name),phase:this.phase};this.rows.push(row);
+    const row={role,model:b.model,reasoning_effort:b.reasoning_effort,reasoning:b.reasoning,stream:b.stream,tools:(b.tools??[]).map(t=>t.function?.name),phase:this.phase};this.rows.push(row);
     if(child)return {role:'assistant',content:`DONE_${this.id}`};
     if(result){
       this.results.push(result);
@@ -63,7 +63,7 @@ export class Worker {
           return {role:'assistant',content:null,tool_calls:[{id:this.callId,type:'function',function:{name:'task_result',arguments:JSON.stringify({[key]:sessionID})}}]};
         }
         this.resumed=true;this.callId+= '-resume';this.phase='delegated';
-        return {role:'assistant',content:null,tool_calls:[{id:this.callId,type:'function',function:{name:'subagent',arguments:JSON.stringify({agent:'fixer',description:'Resume child',sessionID,...(this.omo?{model:`mock/${wire(this.rows.find(r=>r.role==='child').model)}`} : {}),prompt:`ROUTER_CASE:${this.id} CHILD_${this.id} Resume and return done.`})}}]};
+        return {role:'assistant',content:null,tool_calls:[{id:this.callId,type:'function',function:{name:'subagent',arguments:JSON.stringify({agent:'fixer',description:'Resume child',sessionID,...(this.omo?{model:this.options.resumeModel??`mock/${wire(this.rows.find(r=>r.role==='child').model)}`} : {}),prompt:`ROUTER_CASE:${this.id} CHILD_${this.id} Resume and return done.`})}}]};
       }
       this.phase='final';return {role:'assistant',content:'PARENT_DONE'};
     }
@@ -72,7 +72,7 @@ export class Worker {
     this.schema=native.function.parameters;
     for(const k of ['agent','description','prompt','model','background','sessionID'])if(!this.schema.properties[k])throw new Error(`native schema missing ${k}`);
     this.phase='delegated';
-    const {taskKey,...nativeOptions}=this.options;
+    const {taskKey,resumeModel,...nativeOptions}=this.options;
     const args={agent:'fixer',description:'Fixture child',prompt:this.taskText,...nativeOptions};
     row.args=args;return {role:'assistant',content:null,tool_calls:[{id:this.callId,type:'function',function:{name:'subagent',arguments:JSON.stringify(args)}}]};
   }

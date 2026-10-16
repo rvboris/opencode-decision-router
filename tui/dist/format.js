@@ -1,7 +1,12 @@
 // Pure logic for the TUI routing indicator: parses Decision Router jsonl log
 // lines and formats the footer status text. No JSX, no I/O, no reactive code —
 // fully unit-testable. Mirrors src/index.js emit format:
-//   { eventId, sessionID, agent, taskChars, routed, reason, choice?, model?, latencyMs? }
+//   { eventId, sessionID, agent, taskChars, routed, reason, choice?, model?, profile?, effort?, latencyMs? }
+
+// Optional metadata must remain a short plain token, never terminal control text.
+// Ignore invalid metadata rather than hiding an otherwise valid routing result.
+const safeLabel = (value, maxLength) => typeof value === 'string'
+  && value.length <= maxLength && /^[A-Za-z0-9][A-Za-z0-9_-]*$/.test(value);
 
 /**
  * Parse a single jsonl line into a routing log entry, or return null for
@@ -26,6 +31,8 @@ export function parseRouterLine(line) {
     if (typeof value.model !== 'string' || value.model.length === 0) return null;
   }
   if (value.latencyMs !== undefined && value.latencyMs !== null && typeof value.latencyMs !== 'number') return null;
+  if (!safeLabel(value.profile, 64)) delete value.profile;
+  if (!safeLabel(value.effort, 32)) delete value.effort;
   return value;
 }
 
@@ -78,7 +85,8 @@ export function formatIndicator(entry, state = {}) {
   const agent = typeof entry.agent === 'string' && entry.agent.trim()
     ? entry.agent.trim() : 'агент неизвестен';
   if (entry.routed) {
-    return { text: `DR · ${agent} → ${entry.choice}`, tone: 'ok' };
+    const effort = safeLabel(entry.effort, 32) ? `/${entry.effort}` : '';
+    return { text: `DR · ${agent} → ${entry.choice}${effort}`, tone: 'ok' };
   }
   return { text: `DR · ${agent} · fallback`, tone: 'warn' };
 }

@@ -18,8 +18,10 @@ export function buildDecisionRequest(cfg, task) {
     questions: {
       routing: {
         type: 'choice',
-        instructions: 'Select appropriate coding model',
-        criteria: {
+        instructions: cfg.profiles
+          ? 'Select one allowed model and effort profile. Prioritize quality: when uncertain choose the stronger appropriate profile, but do not use maximum effort for every task.'
+          : 'Select appropriate coding model',
+        criteria: cfg.profiles ? Object.fromEntries(Object.entries(cfg.profiles).map(([id, p]) => [id, p.description])) : {
           light: 'Routine bounded edits or lookups with established solution',
           heavy: 'Complex diagnosis, architecture, security-sensitive reasoning or unclear solution',
         },

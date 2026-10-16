@@ -12,6 +12,7 @@ import { createEffect, createSignal } from "solid-js";
 import { readFile } from "fs/promises";
 
 // src/format.js
+var safeLabel = (value, maxLength) => typeof value === "string" && value.length <= maxLength && /^[A-Za-z0-9][A-Za-z0-9_-]*$/.test(value);
 function parseRouterLine(line) {
   if (typeof line !== "string")
     return null;
@@ -40,6 +41,10 @@ function parseRouterLine(line) {
   }
   if (value.latencyMs !== undefined && value.latencyMs !== null && typeof value.latencyMs !== "number")
     return null;
+  if (!safeLabel(value.profile, 64))
+    delete value.profile;
+  if (!safeLabel(value.effort, 32))
+    delete value.effort;
   return value;
 }
 function latestEntryForSession(text, sessionID) {
@@ -83,7 +88,8 @@ function formatIndicator(entry, state = {}) {
     return { text: "DR \xB7 \u043E\u0436\u0438\u0434\u0430\u043D\u0438\u0435", tone: "off" };
   const agent = typeof entry.agent === "string" && entry.agent.trim() ? entry.agent.trim() : "\u0430\u0433\u0435\u043D\u0442 \u043D\u0435\u0438\u0437\u0432\u0435\u0441\u0442\u0435\u043D";
   if (entry.routed) {
-    return { text: `DR \xB7 ${agent} \u2192 ${entry.choice}`, tone: "ok" };
+    const effort = safeLabel(entry.effort, 32) ? `/${entry.effort}` : "";
+    return { text: `DR \xB7 ${agent} \u2192 ${entry.choice}${effort}`, tone: "ok" };
   }
   return { text: `DR \xB7 ${agent} \xB7 fallback`, tone: "warn" };
 }

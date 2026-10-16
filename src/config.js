@@ -100,6 +100,27 @@ export function validateConfig(raw) {
       if (k !== 'light' && k !== 'heavy') throw new ConfigError(`config.models.${k} is not a known choice`);
     }
   }
+  if ('profiles' in raw) {
+    if (!isPlainObject(raw.profiles) || Object.keys(raw.profiles).length === 0) {
+      throw new ConfigError('config.profiles must be a non-empty object');
+    }
+    cfg.profiles = {};
+    for (const [id, profile] of Object.entries(raw.profiles)) {
+      // Never interpolate untrusted schema keys or values into errors.
+      if (!/^(light|heavy)_(medium|high|xhigh)$/.test(id) || !isPlainObject(profile) ||
+          Object.keys(profile).some(k => !['model', 'label', 'effort', 'description'].includes(k)) ||
+          !['light', 'heavy'].includes(profile.label) ||
+          !['medium', 'high', 'xhigh'].includes(profile.effort) ||
+          id !== `${profile.label}_${profile.effort}` ||
+          !validModelId(profile.model) ||
+          profile.model.split('#')[1] !== profile.effort ||
+          typeof profile.description !== 'string' || !profile.description.trim() ||
+          profile.description.length > 4000) {
+        throw new ConfigError('config.profiles contains an invalid profile');
+      }
+      cfg.profiles[id] = { ...profile };
+    }
+  }
   if ('agents' in raw) {
     if (!Array.isArray(raw.agents) || raw.agents.length === 0) {
       throw new ConfigError('config.agents must be a non-empty array of strings');

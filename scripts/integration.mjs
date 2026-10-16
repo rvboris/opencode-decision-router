@@ -10,8 +10,11 @@ export {makeRealBridge} from '../test/integration/real-bridge.mjs';
 const repo=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const argv=process.argv.slice(2);
 const option=(key,fallback)=>argv.includes(`--${key}`)?argv[argv.indexOf(`--${key}`)+1]:fallback;
-const cases=['smoke','control','heavy-to-light','light-to-heavy','pinned','unauthorized','rate-limit','server-error','invalid-choice','invalid-json','deadline','concurrent','background','resume','omo'];
-const requested=option('cases',cases.join(',')).split(',');
+const cases=['profiles-matrix','smoke','control','heavy-to-light','light-to-heavy','pinned','unauthorized','rate-limit','server-error','invalid-choice','invalid-json','deadline','concurrent','background','resume','omo'];
+const requested=option('cases',cases.filter(c=>c!=='profiles-matrix').join(',')).split(',');
+const profileMode=argv.includes('--profiles');
+const fixtureProfiles=Object.fromEntries(Object.entries(JSON.parse(fs.readFileSync(path.join(repo,'examples/profiles.json'),'utf8')).profiles).map(([id,p])=>[id,{...p,model:p.model.replace('omniroute/','mock/')} ]));
+if(profileMode&&option('real-decisions',null))throw new Error('profiles harness is mock-only');
 if(option('real-decisions',null)&&requested.join(',')!=='smoke,light-to-heavy,omo')throw new Error('real preflight requires exactly smoke,light-to-heavy,omo = 6 sequential calls');
 const realMode=option('real-decisions',null)&&option('ledger',null);
 if(process.argv.some(a=>['--real-decisions','--ledger'].includes(a))&&!realMode)throw new Error('real mode requires BOTH --real-decisions <config> and --ledger <path>');
@@ -40,6 +43,12 @@ async function scenario(name,overrides={}) {
   if(['unauthorized','rate-limit','server-error','invalid-choice','invalid-json','deadline'].includes(name)){opts.model='mock/heavy';expected='heavy';}
   if(name==='background')opts.background=true;
   Object.assign(opts,overrides.args??{});
+  const selected=overrides.profile??option('profile','light_medium');
+  if(profileMode&&!Object.hasOwn(fixtureProfiles,selected))throw new Error('unknown fixture profile');
+  const profileSuccess=profileMode&&!['control','pinned','unauthorized','rate-limit','server-error','invalid-choice','invalid-json','deadline'].includes(name);
+  if(profileSuccess)expected=fixtureProfiles[selected].label;
+  const expectedEffort=profileSuccess?fixtureProfiles[selected].effort:undefined;
+  opts.resumeModel=profileSuccess?fixtureProfiles[selected].model:undefined;
   const worker=new Worker(id,opts);worker.resume=name==='resume';worker.omo=!!overrides.omo;
   if(realMode){opts.taskKey=name==='light-to-heavy'?'complex':'easy';worker.taskText=opts.taskKey==='complex'?REAL_TASKS.complex:REAL_TASKS.easy;opts.model=name==='light-to-heavy'?'mock/light':'mock/heavy';expected=name==='light-to-heavy'?'heavy':'light';}
   let workerHTTP,decisionHTTP;
@@ -49,13 +58,16 @@ async function scenario(name,overrides={}) {
       decisions.push({at:Date.now(),body:b});
       if(realBridge){if(realCalls>=6)throw new Error('real-mode hard cap of 6 calls exceeded');realCalls++;realBridge.handle(b,res);return;}
       const status={unauthorized:401,'rate-limit':429,'server-error':503}[name];
-      const send=()=>{res.writeHead(status??200,{'content-type':'application/json'});res.end(name==='invalid-json'?'{':JSON.stringify(status?{error:'fixture'}:decision(name==='invalid-choice'?'bad':name==='light-to-heavy'?'heavy':'light')));};
+      const send=()=>{res.writeHead(status??200,{'content-type':'application/json'});res.end(name==='invalid-json'?'{':JSON.stringify(status?{error:'fixture'}:decision(name==='invalid-choice'?'bad':profileMode?selected:name==='light-to-heavy'?'heavy':'light')));};
       if(name==='deadline'||overrides.delay){const t=setTimeout(send,name==='deadline'?5000:overrides.delay);timers.add(t);res.on('close',()=>{clearTimeout(t);timers.delete(t);});}else send();
     });
-    const cfg={enabled:name!=='control',endpoint:decisionHTTP.url,apiKeyEnv:'FIXTURE_KEY',models:{light:'mock/light',heavy:'mock/heavy'},agents:['fixer','explorer'],timeoutMs:realMode?45000:500,maxTaskChars:4000,logFile:path.join(dir,'router.jsonl')};save(path.join(dir,'router.json'),cfg);
+    const cfg={enabled:name!=='control',endpoint:decisionHTTP.url,apiKeyEnv:'FIXTURE_KEY',models:{light:'mock/light',heavy:'mock/heavy'},agents:['fixer','explorer'],timeoutMs:realMode?45000:500,maxTaskChars:4000,logFile:path.join(dir,'router.jsonl')};if(profileMode)cfg.profiles=fixtureProfiles;save(path.join(dir,'router.json'),cfg);
     let plugin=repo;
     if(argv.includes('--diagnostic-wrapper')){plugin=path.join(dir,'plugin');fs.mkdirSync(plugin);fs.writeFileSync(path.join(plugin,'index.js'),`export {default} from ${JSON.stringify(path.join(repo,'src/index.js'))};\n`);}
     const config={plugins:[plugin],model:'mock/heavy',agent:{build:{model:'mock/heavy'},fixer:{mode:'subagent',model:'mock/heavy',description:'Fixture specialist'},explorer:{mode:'subagent',model:'mock/light'}},provider:{mock:{npm:'@ai-sdk/openai-compatible',options:{baseURL:workerHTTP.url+'/v1',apiKey:'dummy'},models:{heavy:{name:'heavy'},light:{name:'light'},pinned:{name:'pinned'}}}},mcp:{},permission:{'*':'allow'},share:'disabled'};
+    if(profileMode){
+      for(const label of ['light','heavy'])config.provider.mock.models[label].variants=Object.fromEntries(['medium','high','xhigh'].map(effort=>[effort,{reasoningEffort:effort}]));
+    }
     if(overrides.omo){
       const omo='/home/boris/.cache/opencode/npm/oh-my-opencode-slim@latest/1791028966162/node_modules/oh-my-opencode-slim';
       // OMO's published package has no root index.js: register its actual server
@@ -77,11 +89,19 @@ async function scenario(name,overrides={}) {
     assert.ok(worker.schema,'native schema not advertised');
     if(overrides.omo)assert.ok(worker.rows.some(r=>r.tools.some(t=>/^task_(status|result|revive)$/.test(t))),'OMO activation unproven: installed package directory did not advertise OMO lifecycle tools');
     const children=worker.rows.filter(r=>r.role==='child');assert.ok(children.length,'no child inference');
-    for(const child of children)assert.equal(wire(child.model),expected,'wrong child model');
+    for(const child of children){assert.equal(wire(child.model),expected,'wrong child model');if(expectedEffort)assert.equal(child.reasoning_effort,expectedEffort,'wrong actual wire reasoning_effort');}
+    if(profileSuccess){
+      const routes=fs.readFileSync(cfg.logFile,'utf8').trim().split('\n').map(JSON.parse).filter(r=>r.routed);
+      assert.ok(routes.length,'missing routed profile log');
+      for(const route of routes){assert.equal(route.profile,selected);assert.equal(route.effort,expectedEffort);assert.equal(route.model,fixtureProfiles[selected].model);}
+    }
     assert.equal(decisions.length,['control','pinned'].includes(name)?0:1,'classifier count');
     assert.ok(worker.results.length,'missing native tool result');
     const db=new DatabaseSync(path.join(dirs.data,'opencode','opencode.db'),{readOnly:true});
-    const switches=db.prepare("SELECT session_id, type, time_created, data FROM session_message WHERE type='model-switched'").all();db.close();save(path.join(dir,'model-switches.json'),switches);
+    const switches=db.prepare("SELECT session_id, type, time_created, data FROM session_message WHERE type='model-switched'").all();
+    const childModels=db.prepare("SELECT session_id,data FROM session_message WHERE type='assistant'").all().map(r=>({sessionID:r.session_id,...JSON.parse(r.data)})).filter(r=>['fixer','explorer'].includes(r.agent)).map(r=>({sessionID:r.sessionID,agent:r.agent,model:r.model}));
+    db.close();save(path.join(dir,'model-switches.json'),switches);save(path.join(dir,'child-models.json'),childModels);
+    if(expectedEffort){assert.ok(childModels.length,'missing child model history');for(const child of childModels){assert.equal(child.model.providerID,'mock');assert.equal(child.model.id,expected);assert.equal(child.model.variant,expectedEffort,'wrong actual child variant');}}
     const childIDs=worker.results.flatMap(r=>[...r.content.matchAll(/sessionID[=:][\s"']*(ses_[A-Za-z0-9]+)/g)].map(m=>m[1]));
     assert.equal(switches.filter(s=>childIDs.includes(s.session_id)).length,0,'unexpected child model switch in session history');
     if(name==='background'){assert.ok(worker.results.some(r=>/working in the background.*sessionID: ses_/.test(r.content)),'no background acknowledgment');assert.match(run.stdout,/DONE_|completed/,'no child completion event');}
@@ -93,6 +113,17 @@ async function scenario(name,overrides={}) {
 }
 const sanitizeLength=t=>typeof t==='string'?t.length:null;
 for(const name of requested){
+ if(name==='profiles-matrix'){
+   if(!profileMode)throw new Error('profiles-matrix requires --profiles');
+   const matrix=[];
+   for(const omo of [undefined,'first','last'])for(const profile of Object.keys(fixtureProfiles))for(const phase of ['smoke','background','resume'])matrix.push({...await scenario(phase,{omo,profile}),order:omo??'native',profile});
+   for(const omo of [undefined,'first','last']){
+     for(const phase of ['pinned','unauthorized','invalid-choice','deadline'])matrix.push({...await scenario(phase,{omo}),order:omo??'native'});
+     const pair=await Promise.all([scenario('heavy-to-light',{omo,profile:'light_high',delay:150}),scenario('light-to-heavy',{omo,profile:'heavy_xhigh',delay:150})]);
+     matrix.push({name:'concurrent',order:omo??'native',status:pair.every(r=>r.status==='passed')?'passed':'failed',pair});
+   }
+   results.push({name,status:matrix.every(r=>r.status==='passed')?'passed':'failed',matrix});continue;
+ }
  if(!cases.includes(name)){results.push({name,status:'failed',errors:['unknown scenario']});continue;}
  if(realMode&&!['smoke','light-to-heavy','omo'].includes(name)){results.push({name,status:'skipped-real-mode',errors:['real mode limited to smoke/light-to-heavy/omo']});continue;}
  if(realMode&&name==='omo'&&results.filter(r=>r.status==='skipped-real-mode').length<0){/*keep omo*/}

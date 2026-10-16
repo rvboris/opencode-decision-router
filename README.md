@@ -14,6 +14,51 @@ Microsoft Decision API and mock worker inference (native and both OMO plugin
 orders, light/heavy). No real worker-model inference was used. See
 [VALIDATION.md](VALIDATION.md) for evidence and limitations.
 
+### Optional model + effort profiles
+
+Merge `profiles` from [examples/profiles.json](examples/profiles.json) into the router
+configuration to select a model and effort in one classification call. Without
+`profiles`, the existing `models.light` / `models.heavy` behavior is unchanged.
+The initial allowlist is `light_medium`, `light_high`, `heavy_high`, `heavy_xhigh`.
+Each entry has `model` (qualified `provider/model#variant`), `label` (`light` or
+`heavy`), `effort` (`medium`, `high`, `xhigh`), and a nonempty `description` used
+as its classifier criterion. IDs must equal `label_effort`; the target variant
+must match effort, while the provider/model name is configurable independently
+of the display label. Any nonempty selection of these label/effort combinations
+is supported; the four examples are not a hardcoded allowlist. No low/max/ultra
+profiles are added automatically.
+
+The classifier favors quality when uncertain, without always choosing maximum
+effort. Only allowlisted IDs are accepted; arbitrary response model parameters
+are never used. Routing sets the native `input.model` including `#variant`, not
+an invented effort argument. Errors/timeouts preserve the original input with
+no paid retries. Explicit unrelated model pins and resumed sessions are preserved.
+Eligible model bases come from profiles, not the legacy mappings in this mode.
+
+Successful JSONL entries and hook results retain `choice: "light" | "heavy"`
+for old consumers, adding `profile` (selected ID) and `effort` in profiles mode;
+`model` is always the exact qualified target including variant. These extra
+fields are absent in legacy mode. For OMO resume, pass the **full model#variant**
+from the routed child along with its session ID. Local mock wire verification
+can establish SDK serialization, not real upstream support for effort levels.
+
+Mock-only validation commands (isolated temporary HOME/XDG directories; no real
+Decision or worker API calls):
+
+```sh
+node --test test/unit/config.test.js test/unit/policy.test.js test/unit/client.test.js test/unit/router.test.js test/unit/profiles.test.js
+node scripts/integration.mjs --profiles --cases profiles-matrix
+```
+
+The profiles matrix covers all four targets in native and both OMO plugin orders,
+foreground/background/resume, plus fallback, pin and mixed-profile concurrency.
+It asserts actual HTTP `reasoning_effort` alongside the wire model, the child's
+recorded provider/model/variant in OpenCode's database, exact `model#variant`
+router logs, and unchanged child session on resume. Its saved
+`worker.json`, `child-models.json`, `router.jsonl`, and `results.json` are the evidence; a target string
+alone is not evidence that effort reached inference. These new checks must pass
+on the installed runtime before enabling profiles in production.
+
 ### OMO configuration requirements
 
 Router-managed OMO agents (for example fixer and explorer) must use
