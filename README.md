@@ -180,6 +180,14 @@ use successful decisions only; an agent's profile percentages use that agent's
 successful decisions. Fallback is shown separately. Legacy records without effort
 are marked as unspecified, never inferred from today's configuration.
 
+Compact summary, models, effort and agents sections use aligned counts and shares.
+The active scope has a visible marker; theme accents distinguish light and heavy,
+with warnings for fallback and invalid records and muted explanatory text. Labels
+remain meaningful without color. Long names are shortened to the available terminal
+cell width; very narrow tables stack names above numbers. Only model rows get small
+proportional bars, and only when the content area is at least 48 columns wide.
+The panel measures its actual content width, including when the terminal resizes.
+
 The full configured JSONL is read locally on open/refresh, not the footer's last
 400 lines. Invalid lines are reported for the whole journal. The all-records view
 means **saved records only**, not all OpenCode history. Skips are not journaled;

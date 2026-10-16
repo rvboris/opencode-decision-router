@@ -1,6 +1,5 @@
 // Presentation only: aggregation belongs to stats.js.
-const label = (value) => String(value ?? 'не указан').replace(/[\x00-\x1f\x7f-\x9f\u202a-\u202e\u2066-\u2069]/g, '').slice(0, 96);
-const row = (item) => `${label(item.name)} — ${item.count} · ${Number.isFinite(item.percent) ? item.percent.toFixed(1) : '0.0'}%`;
+import { tableRows } from './panel-presentation.js';
 const errors = {
   off: 'Decision Router выключен',
   'config-missing': 'Конфиг не найден',
@@ -8,27 +7,33 @@ const errors = {
   'log-missing': 'Журнал ещё не создан',
   'log-error': 'Не удалось прочитать журнал',
 };
-export function panelLines(state, scope, hasSession = true) {
-  if (state.status === 'loading') return ['Загрузка…'];
-  if (state.status !== 'ready') return [errors[state.status] ?? 'Не удалось прочитать статистику'];
-  if (scope === 'session' && !hasSession) return ['Нет текущей сессии. Tab — весь журнал.'];
+export function panelRows(state, scope, hasSession = true, width = 56) {
+  const row = (text, tone = 'muted') => ({ text, tone });
+  if (state.status === 'loading') return [row('Загрузка…')];
+  if (state.status !== 'ready') return [row(errors[state.status] ?? 'Не удалось прочитать статистику', 'warning')];
+  if (scope === 'session' && !hasSession) return [row('Нет текущей сессии. Tab — весь журнал.')];
   const summary = state[scope];
-  const lines = [
-    `Успешно: ${summary.successful} · fallback: ${summary.fallback}`,
-    'Проценты — от успешных решений.',
-  ];
-  if (!summary.successful) lines.push('Успешных решений пока нет.');
+  const rows = [row('ИТОГ', 'heading'), row(`Успешно: ${summary.successful}`, 'base'),
+    row(`Fallback: ${summary.fallback}`, summary.fallback ? 'warning' : 'muted'),
+    row('Доли — от успешных решений.')];
+  if (!summary.successful) rows.push(row('Успешных решений пока нет.'));
   else {
-    lines.push('', 'Модели', ...summary.models.map(row), '', 'Профили · модель / effort', ...summary.profiles.map(row), '', 'Агенты');
+    const heading = (title) => [row(''), row(title, 'heading')];
+    rows.push(...heading('МОДЕЛИ'), ...tableRows(summary.models, width, { bars: true }),
+      ...heading('EFFORT · модель / профиль'), ...tableRows(summary.profiles, width), ...heading('АГЕНТЫ'));
+    const countWidth = Math.max(1, ...summary.agents.map(agent => String(agent.count).length));
     for (const agent of summary.agents) {
-      lines.push(row(agent), ...agent.profiles.map((profile) => `  ${row(profile)}`));
+      rows.push(...tableRows([agent], width, { countWidth }), ...tableRows(agent.profiles, width, { indent: '  ', countWidth }));
     }
-    lines.push('  Доли профилей агента — внутри агента.');
+    rows.push(row('Доли профилей — внутри агента.'));
   }
-  lines.push('', `Некорректных строк во всём журнале: ${state.invalidLines}`,
-    'Пропуски не журналируются.', 'Весь журнал — только сохранённые записи.',
-    'Это решения, не токены или стоимость.');
-  return lines;
+  rows.push(row(''), row(`Некорректных строк во всём журнале: ${state.invalidLines}`, state.invalidLines ? 'warning' : 'muted'),
+    row('Пропуски не журналируются.'), row('Весь журнал — только сохранённые записи.'),
+    row('Это решения, не токены или стоимость.'));
+  return rows;
+}
+export function panelLines(state, scope, hasSession = true, width = 56) {
+  return panelRows(state, scope, hasSession, width).map(row => row.text);
 }
 
 // A newer refresh/session always wins; disposal prevents late publications.

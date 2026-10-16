@@ -203,14 +203,15 @@ var registerRoutingIndicator = async (ctx) => {
 };
 
 // src/panel.tsx
-import { createComponent as _$createComponent } from "@opentui/solid";
+import { memo as _$memo } from "@opentui/solid";
 import { effect as _$effect2 } from "@opentui/solid";
 import { insert as _$insert2 } from "@opentui/solid";
+import { createComponent as _$createComponent } from "@opentui/solid";
 import { createTextNode as _$createTextNode } from "@opentui/solid";
 import { insertNode as _$insertNode2 } from "@opentui/solid";
 import { setProp as _$setProp2 } from "@opentui/solid";
 import { createElement as _$createElement2 } from "@opentui/solid";
-import { createEffect as createEffect2, createSignal as createSignal2, onCleanup } from "solid-js";
+import { createEffect as createEffect2, createSignal as createSignal2, For, onCleanup } from "solid-js";
 import { useTerminalDimensions } from "@opentui/solid";
 
 // src/stats.js
@@ -338,9 +339,51 @@ async function readRouterStats({ configPath: configPath2, sessionID, readFileImp
   return { status: "ready", session: session.result(), all: all.result(), invalidLines };
 }
 
+// src/panel-presentation.js
+var segments = new Intl.Segmenter(undefined, { granularity: "grapheme" });
+var clean = (value) => String(value ?? "\u043D\u0435 \u0443\u043A\u0430\u0437\u0430\u043D").replace(/[\x00-\x1f\x7f-\x9f\u202a-\u202e\u2066-\u2069]/g, "");
+var cells = (s) => {
+  const cp = s.codePointAt(0);
+  if (/^\p{Mark}+$/u.test(s))
+    return 0;
+  return /\p{Extended_Pictographic}|\p{Regional_Indicator}/u.test(s) || cp >= 4352 && (cp <= 4447 || cp === 9001 || cp === 9002 || cp >= 11904 && cp <= 42191 || cp >= 44032 && cp <= 55203 || cp >= 63744 && cp <= 64255 || cp >= 65040 && cp <= 65135 || cp >= 65281 && cp <= 65376 || cp >= 65504 && cp <= 65510 || cp >= 131072) ? 2 : 1;
+};
+var cellWidth = (text) => [...segments.segment(text)].reduce((n, x) => n + cells(x.segment), 0);
+function fitLabel(value, width) {
+  const text = clean(value).slice(0, 384);
+  if (cellWidth(text) <= width)
+    return text;
+  let result = "", used = 0;
+  for (const { segment } of segments.segment(text)) {
+    const size = cells(segment);
+    if (used + size > width - 1)
+      break;
+    result += segment;
+    used += size;
+  }
+  return width > 0 ? result + "\u2026" : "";
+}
+var pad = (text, width) => text + " ".repeat(Math.max(0, width - cellWidth(text)));
+function tableRows(items, width, { bars = false, indent = "", countWidth = Math.max(1, ...items.map((x) => String(x.count).length)) } = {}) {
+  const graph = bars && width >= 48;
+  const nameWidth = width - countWidth - 10 - (graph ? 9 : 0) - indent.length;
+  return items.map((item) => {
+    const percent2 = Number.isFinite(item.percent) ? item.percent : 0;
+    const numbers = `${String(item.count).padStart(countWidth)}  ${percent2.toFixed(1).padStart(5)}%`;
+    const tone = /^light(?:\s*\/|$)/.test(item.name) ? "light" : /^heavy(?:\s*\/|$)/.test(item.name) ? "heavy" : "base";
+    if (nameWidth < 6)
+      return { text: `${fitLabel(indent + item.name, width)}
+${fitLabel(numbers.trimStart(), width)}`, tone };
+    const filled = Math.round(Math.max(0, Math.min(100, percent2)) / 100 * 8);
+    return { text: `${indent}${pad(fitLabel(item.name, nameWidth), nameWidth)}  ${numbers}${graph ? " " + "\u2501".repeat(filled) + "\xB7".repeat(8 - filled) : ""}`, tone };
+  });
+}
+function scopeTabs(scope, width) {
+  const labels = width >= 28 ? ["\u0421\u0435\u0441\u0441\u0438\u044F", "\u0412\u0435\u0441\u044C \u0436\u0443\u0440\u043D\u0430\u043B"] : ["\u0421\u0435\u0441\u0441\u0438\u044F", "\u0416\u0443\u0440\u043D\u0430\u043B"];
+  return labels.map((label, i) => ({ text: (scope === (i ? "all" : "session") ? "\u25B8 " : "  ") + label, active: scope === (i ? "all" : "session") }));
+}
+
 // src/panel-state.js
-var label = (value) => String(value ?? "\u043D\u0435 \u0443\u043A\u0430\u0437\u0430\u043D").replace(/[\x00-\x1f\x7f-\x9f\u202a-\u202e\u2066-\u2069]/g, "").slice(0, 96);
-var row = (item) => `${label(item.name)} \u2014 ${item.count} \xB7 ${Number.isFinite(item.percent) ? item.percent.toFixed(1) : "0.0"}%`;
 var errors = {
   off: "Decision Router \u0432\u044B\u043A\u043B\u044E\u0447\u0435\u043D",
   "config-missing": "\u041A\u043E\u043D\u0444\u0438\u0433 \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D",
@@ -348,29 +391,34 @@ var errors = {
   "log-missing": "\u0416\u0443\u0440\u043D\u0430\u043B \u0435\u0449\u0451 \u043D\u0435 \u0441\u043E\u0437\u0434\u0430\u043D",
   "log-error": "\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u043F\u0440\u043E\u0447\u0438\u0442\u0430\u0442\u044C \u0436\u0443\u0440\u043D\u0430\u043B"
 };
-function panelLines(state, scope, hasSession = true) {
+function panelRows(state, scope, hasSession = true, width = 56) {
+  const row = (text, tone = "muted") => ({ text, tone });
   if (state.status === "loading")
-    return ["\u0417\u0430\u0433\u0440\u0443\u0437\u043A\u0430\u2026"];
+    return [row("\u0417\u0430\u0433\u0440\u0443\u0437\u043A\u0430\u2026")];
   if (state.status !== "ready")
-    return [errors[state.status] ?? "\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u043F\u0440\u043E\u0447\u0438\u0442\u0430\u0442\u044C \u0441\u0442\u0430\u0442\u0438\u0441\u0442\u0438\u043A\u0443"];
+    return [row(errors[state.status] ?? "\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u043F\u0440\u043E\u0447\u0438\u0442\u0430\u0442\u044C \u0441\u0442\u0430\u0442\u0438\u0441\u0442\u0438\u043A\u0443", "warning")];
   if (scope === "session" && !hasSession)
-    return ["\u041D\u0435\u0442 \u0442\u0435\u043A\u0443\u0449\u0435\u0439 \u0441\u0435\u0441\u0441\u0438\u0438. Tab \u2014 \u0432\u0435\u0441\u044C \u0436\u0443\u0440\u043D\u0430\u043B."];
+    return [row("\u041D\u0435\u0442 \u0442\u0435\u043A\u0443\u0449\u0435\u0439 \u0441\u0435\u0441\u0441\u0438\u0438. Tab \u2014 \u0432\u0435\u0441\u044C \u0436\u0443\u0440\u043D\u0430\u043B.")];
   const summary = state[scope];
-  const lines = [
-    `\u0423\u0441\u043F\u0435\u0448\u043D\u043E: ${summary.successful} \xB7 fallback: ${summary.fallback}`,
-    "\u041F\u0440\u043E\u0446\u0435\u043D\u0442\u044B \u2014 \u043E\u0442 \u0443\u0441\u043F\u0435\u0448\u043D\u044B\u0445 \u0440\u0435\u0448\u0435\u043D\u0438\u0439."
+  const rows = [
+    row("\u0418\u0422\u041E\u0413", "heading"),
+    row(`\u0423\u0441\u043F\u0435\u0448\u043D\u043E: ${summary.successful}`, "base"),
+    row(`Fallback: ${summary.fallback}`, summary.fallback ? "warning" : "muted"),
+    row("\u0414\u043E\u043B\u0438 \u2014 \u043E\u0442 \u0443\u0441\u043F\u0435\u0448\u043D\u044B\u0445 \u0440\u0435\u0448\u0435\u043D\u0438\u0439.")
   ];
   if (!summary.successful)
-    lines.push("\u0423\u0441\u043F\u0435\u0448\u043D\u044B\u0445 \u0440\u0435\u0448\u0435\u043D\u0438\u0439 \u043F\u043E\u043A\u0430 \u043D\u0435\u0442.");
+    rows.push(row("\u0423\u0441\u043F\u0435\u0448\u043D\u044B\u0445 \u0440\u0435\u0448\u0435\u043D\u0438\u0439 \u043F\u043E\u043A\u0430 \u043D\u0435\u0442."));
   else {
-    lines.push("", "\u041C\u043E\u0434\u0435\u043B\u0438", ...summary.models.map(row), "", "\u041F\u0440\u043E\u0444\u0438\u043B\u0438 \xB7 \u043C\u043E\u0434\u0435\u043B\u044C / effort", ...summary.profiles.map(row), "", "\u0410\u0433\u0435\u043D\u0442\u044B");
+    const heading = (title) => [row(""), row(title, "heading")];
+    rows.push(...heading("\u041C\u041E\u0414\u0415\u041B\u0418"), ...tableRows(summary.models, width, { bars: true }), ...heading("EFFORT \xB7 \u043C\u043E\u0434\u0435\u043B\u044C / \u043F\u0440\u043E\u0444\u0438\u043B\u044C"), ...tableRows(summary.profiles, width), ...heading("\u0410\u0413\u0415\u041D\u0422\u042B"));
+    const countWidth = Math.max(1, ...summary.agents.map((agent) => String(agent.count).length));
     for (const agent of summary.agents) {
-      lines.push(row(agent), ...agent.profiles.map((profile) => `  ${row(profile)}`));
+      rows.push(...tableRows([agent], width, { countWidth }), ...tableRows(agent.profiles, width, { indent: "  ", countWidth }));
     }
-    lines.push("  \u0414\u043E\u043B\u0438 \u043F\u0440\u043E\u0444\u0438\u043B\u0435\u0439 \u0430\u0433\u0435\u043D\u0442\u0430 \u2014 \u0432\u043D\u0443\u0442\u0440\u0438 \u0430\u0433\u0435\u043D\u0442\u0430.");
+    rows.push(row("\u0414\u043E\u043B\u0438 \u043F\u0440\u043E\u0444\u0438\u043B\u0435\u0439 \u2014 \u0432\u043D\u0443\u0442\u0440\u0438 \u0430\u0433\u0435\u043D\u0442\u0430."));
   }
-  lines.push("", `\u041D\u0435\u043A\u043E\u0440\u0440\u0435\u043A\u0442\u043D\u044B\u0445 \u0441\u0442\u0440\u043E\u043A \u0432\u043E \u0432\u0441\u0451\u043C \u0436\u0443\u0440\u043D\u0430\u043B\u0435: ${state.invalidLines}`, "\u041F\u0440\u043E\u043F\u0443\u0441\u043A\u0438 \u043D\u0435 \u0436\u0443\u0440\u043D\u0430\u043B\u0438\u0440\u0443\u044E\u0442\u0441\u044F.", "\u0412\u0435\u0441\u044C \u0436\u0443\u0440\u043D\u0430\u043B \u2014 \u0442\u043E\u043B\u044C\u043A\u043E \u0441\u043E\u0445\u0440\u0430\u043D\u0451\u043D\u043D\u044B\u0435 \u0437\u0430\u043F\u0438\u0441\u0438.", "\u042D\u0442\u043E \u0440\u0435\u0448\u0435\u043D\u0438\u044F, \u043D\u0435 \u0442\u043E\u043A\u0435\u043D\u044B \u0438\u043B\u0438 \u0441\u0442\u043E\u0438\u043C\u043E\u0441\u0442\u044C.");
-  return lines;
+  rows.push(row(""), row(`\u041D\u0435\u043A\u043E\u0440\u0440\u0435\u043A\u0442\u043D\u044B\u0445 \u0441\u0442\u0440\u043E\u043A \u0432\u043E \u0432\u0441\u0451\u043C \u0436\u0443\u0440\u043D\u0430\u043B\u0435: ${state.invalidLines}`, state.invalidLines ? "warning" : "muted"), row("\u041F\u0440\u043E\u043F\u0443\u0441\u043A\u0438 \u043D\u0435 \u0436\u0443\u0440\u043D\u0430\u043B\u0438\u0440\u0443\u044E\u0442\u0441\u044F."), row("\u0412\u0435\u0441\u044C \u0436\u0443\u0440\u043D\u0430\u043B \u2014 \u0442\u043E\u043B\u044C\u043A\u043E \u0441\u043E\u0445\u0440\u0430\u043D\u0451\u043D\u043D\u044B\u0435 \u0437\u0430\u043F\u0438\u0441\u0438."), row("\u042D\u0442\u043E \u0440\u0435\u0448\u0435\u043D\u0438\u044F, \u043D\u0435 \u0442\u043E\u043A\u0435\u043D\u044B \u0438\u043B\u0438 \u0441\u0442\u043E\u0438\u043C\u043E\u0441\u0442\u044C."));
+  return rows;
 }
 function createPanelLoader(read, publish) {
   let version = 0;
@@ -440,39 +488,71 @@ function registerRoutingStats(ctx) {
         run: () => ctx.ui.dialog.clear()
       }]
     }));
+    const [contentWidth, setContentWidth] = createSignal2(24);
+    const color = (tone) => tone === "light" ? ctx.theme.text.action.secondary.base : tone === "heavy" || tone === "heading" ? ctx.theme.text.action.primary.base : tone === "warning" ? ctx.theme.text.feedback.warning.base : tone === "base" ? ctx.theme.text.base : ctx.theme.text.muted;
     return (() => {
-      var _el$ = _$createElement2("box"), _el$2 = _$createElement2("text"), _el$4 = _$createElement2("text"), _el$5 = _$createElement2("scrollbox"), _el$6 = _$createElement2("text"), _el$7 = _$createElement2("text");
+      var _el$ = _$createElement2("box"), _el$2 = _$createElement2("text"), _el$4 = _$createElement2("box"), _el$5 = _$createElement2("scrollbox"), _el$6 = _$createElement2("box"), _el$7 = _$createElement2("text");
       _$insertNode2(_el$, _el$2);
       _$insertNode2(_el$, _el$4);
       _$insertNode2(_el$, _el$5);
       _$insertNode2(_el$, _el$7);
       _$setProp2(_el$, "flexDirection", "column");
       _$setProp2(_el$, "paddingX", 1);
-      _$insertNode2(_el$2, _$createTextNode(`Decision Router: \u0441\u0442\u0430\u0442\u0438\u0441\u0442\u0438\u043A\u0430`));
-      _$insert2(_el$4, () => scope() === "session" ? "\u0422\u0435\u043A\u0443\u0449\u0430\u044F \u0441\u0435\u0441\u0441\u0438\u044F" : "\u0412\u0435\u0441\u044C \u0441\u043E\u0445\u0440\u0430\u043D\u0451\u043D\u043D\u044B\u0439 \u0436\u0443\u0440\u043D\u0430\u043B");
+      _$insertNode2(_el$2, _$createTextNode(`Decision Router \xB7 \u0441\u0442\u0430\u0442\u0438\u0441\u0442\u0438\u043A\u0430`));
+      _$setProp2(_el$2, "flexShrink", 0);
+      _$setProp2(_el$4, "flexDirection", "row");
+      _$setProp2(_el$4, "flexWrap", "wrap");
+      _$setProp2(_el$4, "flexShrink", 0);
+      _$setProp2(_el$4, "columnGap", 2);
+      _$insert2(_el$4, _$createComponent(For, {
+        get each() {
+          return scopeTabs(scope(), contentWidth());
+        },
+        children: (tab) => (() => {
+          var _el$9 = _$createElement2("text");
+          _$insert2(_el$9, () => tab.text);
+          _$effect2((_$p) => _$setProp2(_el$9, "fg", tab.active ? ctx.theme.text.action.primary.base : ctx.theme.text.muted, _$p));
+          return _el$9;
+        })()
+      }));
       _$insertNode2(_el$5, _el$6);
       _$setProp2(_el$5, "focused", true);
       _$setProp2(_el$5, "flexGrow", 1);
       _$setProp2(_el$5, "minHeight", 1);
       _$setProp2(_el$5, "scrollY", true);
       _$setProp2(_el$5, "scrollX", false);
-      _$insert2(_el$6, () => panelLines(state(), scope(), !!sessionID()).join(`
-`));
+      _$setProp2(_el$6, "flexDirection", "column");
+      _$setProp2(_el$6, "width", "100%");
+      _$setProp2(_el$6, "paddingRight", 1);
+      _$setProp2(_el$6, "onSizeChange", function() {
+        setContentWidth(Math.max(1, Math.floor(this.width) - 1));
+      });
+      _$insert2(_el$6, _$createComponent(For, {
+        get each() {
+          return panelRows(state(), scope(), !!sessionID(), contentWidth());
+        },
+        children: (row) => (() => {
+          var _el$0 = _$createElement2("text");
+          _$setProp2(_el$0, "wrapMode", "word");
+          _$setProp2(_el$0, "flexShrink", 0);
+          _$insert2(_el$0, () => row.text || " ");
+          _$effect2((_$p) => _$setProp2(_el$0, "fg", color(row.tone), _$p));
+          return _el$0;
+        })()
+      }));
       _$insertNode2(_el$7, _$createTextNode(`Tab \u043E\u0431\u043B\u0430\u0441\u0442\u044C \xB7 R \u043E\u0431\u043D\u043E\u0432\u0438\u0442\u044C \xB7 \u2191\u2193 \u043B\u0438\u0441\u0442\u0430\u0442\u044C \xB7 Esc \u0437\u0430\u043A\u0440\u044B\u0442\u044C`));
+      _$setProp2(_el$7, "flexShrink", 0);
+      _$setProp2(_el$7, "wrapMode", "word");
       _$effect2((_p$) => {
-        var _v$ = Math.max(3, Math.min(28, dimensions().height - 6)), _v$2 = ctx.theme.text.action.secondary.base, _v$3 = ctx.theme.text.muted, _v$4 = ctx.theme.text.muted, _v$5 = ctx.theme.text.muted;
+        var _v$ = Math.max(3, Math.min(28, dimensions().height - 6)), _v$2 = ctx.theme.text.base, _v$3 = ctx.theme.text.muted;
         _v$ !== _p$.e && (_p$.e = _$setProp2(_el$, "height", _v$, _p$.e));
         _v$2 !== _p$.t && (_p$.t = _$setProp2(_el$2, "fg", _v$2, _p$.t));
-        _v$3 !== _p$.a && (_p$.a = _$setProp2(_el$4, "fg", _v$3, _p$.a));
-        _v$4 !== _p$.o && (_p$.o = _$setProp2(_el$6, "fg", _v$4, _p$.o));
-        _v$5 !== _p$.i && (_p$.i = _$setProp2(_el$7, "fg", _v$5, _p$.i));
+        _v$3 !== _p$.a && (_p$.a = _$setProp2(_el$7, "fg", _v$3, _p$.a));
         return _p$;
       }, {
         e: undefined,
         t: undefined,
-        a: undefined,
-        o: undefined,
-        i: undefined
+        a: undefined
       });
       return _el$;
     })();
