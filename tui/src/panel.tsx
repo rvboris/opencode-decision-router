@@ -40,7 +40,7 @@ export function registerRoutingStats(ctx: Plugin.Context) {
       <text fg={ctx.theme.text.muted}>Tab область · R обновить · ↑↓ листать · Esc закрыть</text>
     </box>
   }
-  ctx.keymap.layer(() => ({ commands: [{
+  ctx.keymap.layer(() => ({ mode: 'global', commands: [{
     id: 'decision-router.stats', title: 'Decision Router: статистика',
     group: 'Decision Router', palette: true,
     run: () => {

@@ -478,6 +478,7 @@ function registerRoutingStats(ctx) {
     })();
   };
   ctx.keymap.layer(() => ({
+    mode: "global",
     commands: [{
       id: "decision-router.stats",
       title: "Decision Router: \u0441\u0442\u0430\u0442\u0438\u0441\u0442\u0438\u043A\u0430",
