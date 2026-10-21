@@ -184,9 +184,18 @@ Compact summary, models, effort and agents sections use aligned counts and share
 The active scope has a visible marker; theme accents distinguish light and heavy,
 with warnings for fallback and invalid records and muted explanatory text. Labels
 remain meaningful without color. Long names are shortened to the available terminal
-cell width; very narrow tables stack names above numbers. Only model rows get small
-proportional bars, and only when the content area is at least 48 columns wide.
-The panel measures its actual content width, including when the terminal resizes.
+cell width; very narrow tables stack names above numbers.
+
+All table sections (models, effort, agents) share one fixed grid: the name column,
+right-aligned counts, one-decimal percentages and an 8-cell proportional share bar
+sit on the same cells in every section, so rows line up vertically. Share bars
+appear everywhere at once — models `━`, effort `═`, agents `─`, on a common `·`
+background — and only when the content area is at least 48 columns wide; below
+that the bar column is dropped uniformly. Each section gets its own rule
+character (`═ ИТОГ`, `─ МОДЕЛИ`, `┄ EFFORT`, `┈ АГЕНТЫ`) so the hierarchy reads
+at a glance, and agent sub-profiles are marked with a fixed `└` indent that keeps
+them on the same numeric columns. The panel measures its actual content width,
+including when the terminal resizes.
 
 The full configured JSONL is read locally on open/refresh, not the footer's last
 400 lines. Invalid lines are reported for the whole journal. The all-records view

@@ -364,19 +364,40 @@ function fitLabel(value, width) {
   return width > 0 ? result + "\u2026" : "";
 }
 var pad = (text, width) => text + " ".repeat(Math.max(0, width - cellWidth(text)));
-function tableRows(items, width, { bars = false, indent = "", countWidth = Math.max(1, ...items.map((x) => String(x.count).length)) } = {}) {
-  const graph = bars && width >= 48;
-  const nameWidth = width - countWidth - 10 - (graph ? 9 : 0) - indent.length;
+var BAR_GLYPHS = { model: "\u2501", effort: "\u2550", agent: "\u2500" };
+var BAR_EMPTY = "\xB7";
+var PERCENT_CELLS = 6;
+var BAR_CELLS = 8;
+var GRID = { indent: 2, gap: 2, percent: PERCENT_CELLS, bar: BAR_CELLS };
+function tableGrid(items, width) {
+  const countWidth = Math.max(1, ...items.map((x) => String(x.count).length));
+  const nameWidth = width - GRID.indent - countWidth - 1 - PERCENT_CELLS - 1 - BAR_CELLS - GRID.gap;
+  return { countWidth, nameWidth };
+}
+function tableRows(items, width, { indent = "", countWidth = Math.max(1, ...items.map((x) => String(x.count).length)), nameWidth = width - GRID.indent - GRID.gap - countWidth - 1 - PERCENT_CELLS - 1 - BAR_CELLS, bar = null } = {}) {
+  const glyph = BAR_GLYPHS[bar] || null;
+  const graph = glyph !== null && width >= 48;
   return items.map((item) => {
     const percent2 = Number.isFinite(item.percent) ? item.percent : 0;
-    const numbers = `${String(item.count).padStart(countWidth)}  ${percent2.toFixed(1).padStart(5)}%`;
+    const numbers = `${String(item.count).padStart(countWidth)} ${percent2.toFixed(1).padStart(5)}%`;
     const tone = /^light(?:\s*\/|$)/.test(item.name) ? "light" : /^heavy(?:\s*\/|$)/.test(item.name) ? "heavy" : "base";
     if (nameWidth < 6)
       return { text: `${fitLabel(indent + item.name, width)}
 ${fitLabel(numbers.trimStart(), width)}`, tone };
-    const filled = Math.round(Math.max(0, Math.min(100, percent2)) / 100 * 8);
-    return { text: `${indent}${pad(fitLabel(item.name, nameWidth), nameWidth)}  ${numbers}${graph ? " " + "\u2501".repeat(filled) + "\xB7".repeat(8 - filled) : ""}`, tone };
+    const filled = Math.round(Math.max(0, Math.min(100, percent2)) / 100 * BAR_CELLS);
+    const share = graph ? ` ${glyph.repeat(filled)}${BAR_EMPTY.repeat(BAR_CELLS - filled)}` : "";
+    const label = pad(fitLabel(item.name, nameWidth), nameWidth);
+    return { text: `${pad(indent, GRID.indent)}${label}${" ".repeat(GRID.gap)}${numbers}${share}`.trimEnd(), tone };
   });
+}
+function sectionRule(title, fill, width) {
+  const label = ` ${title} `;
+  const rest = Math.max(0, width - cellWidth(label));
+  return `${fill.repeat(Math.min(2, rest))}${label}${fill.repeat(Math.max(0, rest - 2))}`.trimEnd();
+}
+function summaryLine(label, value, width, countWidth) {
+  const name = pad(label, Math.max(6, width - countWidth - GRID.indent));
+  return `${pad("", GRID.indent)}${name}${String(value).padStart(countWidth)}`;
 }
 function scopeTabs(scope, width) {
   const labels = width >= 28 ? ["\u0421\u0435\u0441\u0441\u0438\u044F", "\u0412\u0435\u0441\u044C \u0436\u0443\u0440\u043D\u0430\u043B"] : ["\u0421\u0435\u0441\u0441\u0438\u044F", "\u0416\u0443\u0440\u043D\u0430\u043B"];
@@ -400,20 +421,26 @@ function panelRows(state, scope, hasSession = true, width = 56) {
   if (scope === "session" && !hasSession)
     return [row("\u041D\u0435\u0442 \u0442\u0435\u043A\u0443\u0449\u0435\u0439 \u0441\u0435\u0441\u0441\u0438\u0438. Tab \u2014 \u0432\u0435\u0441\u044C \u0436\u0443\u0440\u043D\u0430\u043B.")];
   const summary = state[scope];
-  const rows = [
-    row("\u0418\u0422\u041E\u0413", "heading"),
-    row(`\u0423\u0441\u043F\u0435\u0448\u043D\u043E: ${summary.successful}`, "base"),
-    row(`Fallback: ${summary.fallback}`, summary.fallback ? "warning" : "muted"),
-    row("\u0414\u043E\u043B\u0438 \u2014 \u043E\u0442 \u0443\u0441\u043F\u0435\u0448\u043D\u044B\u0445 \u0440\u0435\u0448\u0435\u043D\u0438\u0439.")
+  const gridItems = [
+    ...summary.models,
+    ...summary.profiles,
+    ...summary.agents,
+    ...summary.agents.flatMap((agent) => agent.profiles)
   ];
+  const { countWidth } = tableGrid(gridItems.length ? gridItems : [{ count: 0 }], width);
+  const rules = { \u{438}\u{442}\u{43e}\u{433}: "\u2550", \u{43c}\u{43e}\u{434}\u{435}\u{43b}\u{438}: "\u2500", effort: "\u2504", \u{430}\u{433}\u{435}\u{43d}\u{442}\u{44b}: "\u2508" };
+  const heading = (title, fill) => [row(""), row(sectionRule(title, fill, width), "heading")];
+  const rows = [];
+  rows.push(...heading("\u0418\u0422\u041E\u0413", rules.\u{438}\u{442}\u{43e}\u{433}), row(summaryLine("\u0423\u0441\u043F\u0435\u0448\u043D\u043E", summary.successful, width, countWidth), "base"), row(summaryLine("Fallback", summary.fallback, width, countWidth), summary.fallback ? "warning" : "muted"), row("\u0414\u043E\u043B\u0438 \u2014 \u043E\u0442 \u0443\u0441\u043F\u0435\u0448\u043D\u044B\u0445 \u0440\u0435\u0448\u0435\u043D\u0438\u0439."));
   if (!summary.successful)
     rows.push(row("\u0423\u0441\u043F\u0435\u0448\u043D\u044B\u0445 \u0440\u0435\u0448\u0435\u043D\u0438\u0439 \u043F\u043E\u043A\u0430 \u043D\u0435\u0442."));
   else {
-    const heading = (title) => [row(""), row(title, "heading")];
-    rows.push(...heading("\u041C\u041E\u0414\u0415\u041B\u0418"), ...tableRows(summary.models, width, { bars: true }), ...heading("EFFORT \xB7 \u043C\u043E\u0434\u0435\u043B\u044C / \u043F\u0440\u043E\u0444\u0438\u043B\u044C"), ...tableRows(summary.profiles, width), ...heading("\u0410\u0413\u0415\u041D\u0422\u042B"));
-    const countWidth = Math.max(1, ...summary.agents.map((agent) => String(agent.count).length));
+    const items = (grid) => tableRows(grid.items, width, { countWidth, nameWidth: grid.nameWidth, bar: grid.bar });
+    const { nameWidth } = tableGrid(gridItems, width);
+    rows.push(...heading("\u041C\u041E\u0414\u0415\u041B\u0418", rules.\u{43c}\u{43e}\u{434}\u{435}\u{43b}\u{438}), ...items({ items: summary.models, nameWidth, bar: "model" }), ...heading("EFFORT \xB7 \u043C\u043E\u0434\u0435\u043B\u044C / \u043F\u0440\u043E\u0444\u0438\u043B\u044C", rules.effort), ...items({ items: summary.profiles, nameWidth, bar: "effort" }), ...heading("\u0410\u0413\u0415\u041D\u0422\u042B", rules.\u{430}\u{433}\u{435}\u{43d}\u{442}\u{44b}));
     for (const agent of summary.agents) {
-      rows.push(...tableRows([agent], width, { countWidth }), ...tableRows(agent.profiles, width, { indent: "  ", countWidth }));
+      rows.push(...items({ items: [agent], nameWidth, bar: "agent" }));
+      rows.push(...tableRows(agent.profiles, width, { countWidth, nameWidth, indent: "\u2514", bar: "effort" }));
     }
     rows.push(row("\u0414\u043E\u043B\u0438 \u043F\u0440\u043E\u0444\u0438\u043B\u0435\u0439 \u2014 \u0432\u043D\u0443\u0442\u0440\u0438 \u0430\u0433\u0435\u043D\u0442\u0430."));
   }

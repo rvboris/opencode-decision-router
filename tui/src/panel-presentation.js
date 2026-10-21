@@ -22,18 +22,45 @@ export function fitLabel(value, width) {
   }
   return width > 0 ? result + '…' : '';
 }
-const pad = (text, width) => text + ' '.repeat(Math.max(0, width - cellWidth(text)));
-export function tableRows(items, width, { bars = false, indent = '', countWidth = Math.max(1, ...items.map(x => String(x.count).length)) } = {}) {
-  const graph = bars && width >= 48;
-  const nameWidth = width - countWidth - 10 - (graph ? 9 : 0) - indent.length;
-  return items.map(item => {
+export const pad = (text, width) => text + ' '.repeat(Math.max(0, width - cellWidth(text)));
+
+// One fixed grid for every table section: indent (2) + name + 2 spaces +
+// count + 1 space + percent ("100.0%" = 6 cells) + 1 space + share bar (8).
+// All sections share countWidth/nameWidth so numeric columns line up exactly.
+const BAR_GLYPHS = { model: '━', effort: '═', agent: '─' };
+const BAR_EMPTY = '·';
+const PERCENT_CELLS = 6;
+const BAR_CELLS = 8;
+export const GRID = { indent: 2, gap: 2, percent: PERCENT_CELLS, bar: BAR_CELLS };
+export function tableGrid(items, width) {
+  const countWidth = Math.max(1, ...items.map((x) => String(x.count).length));
+  const nameWidth = width - GRID.indent - countWidth - 1 - PERCENT_CELLS - 1 - BAR_CELLS - GRID.gap;
+  return { countWidth, nameWidth };
+}
+export function tableRows(items, width, { indent = '', countWidth = Math.max(1, ...items.map((x) => String(x.count).length)), nameWidth = width - GRID.indent - GRID.gap - countWidth - 1 - PERCENT_CELLS - 1 - BAR_CELLS, bar = null } = {}) {
+  const glyph = BAR_GLYPHS[bar] || null;
+  const graph = glyph !== null && width >= 48;
+  return items.map((item) => {
     const percent = Number.isFinite(item.percent) ? item.percent : 0;
-    const numbers = `${String(item.count).padStart(countWidth)}  ${percent.toFixed(1).padStart(5)}%`;
+    const numbers = `${String(item.count).padStart(countWidth)} ${(percent.toFixed(1)).padStart(5)}%`;
     const tone = /^light(?:\s*\/|$)/.test(item.name) ? 'light' : /^heavy(?:\s*\/|$)/.test(item.name) ? 'heavy' : 'base';
     if (nameWidth < 6) return { text: `${fitLabel(indent + item.name, width)}\n${fitLabel(numbers.trimStart(), width)}`, tone };
-    const filled = Math.round(Math.max(0, Math.min(100, percent)) / 100 * 8);
-    return { text: `${indent}${pad(fitLabel(item.name, nameWidth), nameWidth)}  ${numbers}${graph ? ' ' + '━'.repeat(filled) + '·'.repeat(8 - filled) : ''}`, tone };
+    const filled = Math.round(Math.max(0, Math.min(100, percent)) / 100 * BAR_CELLS);
+    const share = graph ? ` ${glyph.repeat(filled)}${BAR_EMPTY.repeat(BAR_CELLS - filled)}` : '';
+    const label = pad(fitLabel(item.name, nameWidth), nameWidth);
+    return { text: `${pad(indent, GRID.indent)}${label}${' '.repeat(GRID.gap)}${numbers}${share}`.trimEnd(), tone };
   });
+}
+// Section rules: a distinct fill character per section keeps the hierarchy
+// readable while the title always starts at the same cell.
+export function sectionRule(title, fill, width) {
+  const label = ` ${title} `;
+  const rest = Math.max(0, width - cellWidth(label));
+  return `${fill.repeat(Math.min(2, rest))}${label}${fill.repeat(Math.max(0, rest - 2))}`.trimEnd();
+}
+export function summaryLine(label, value, width, countWidth) {
+  const name = pad(label, Math.max(6, width - countWidth - GRID.indent));
+  return `${pad('', GRID.indent)}${name}${String(value).padStart(countWidth)}`;
 }
 export function scopeTabs(scope, width) {
   const labels = width >= 28 ? ['Сессия', 'Весь журнал'] : ['Сессия', 'Журнал'];

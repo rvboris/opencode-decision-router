@@ -13,7 +13,7 @@ const ready = { status: 'ready', session: summary, all: empty, invalidLines: 2 }
 
 test('panel scopes, precise percentages, separate fallback and honest legacy labels', () => {
   const text = panelLines(ready, 'session').join('\n');
-  assert.match(text, /Успешно: 3\nFallback: 1/);
+  assert.match(text, /Успешно\s+3\n\s+Fallback\s+1/);
   assert.match(text, /heavy\/xhigh\s+2\s+66\.7%/);
   assert.match(text, /effort не указан/);
   assert.match(text, /explorer\s+3\s+100\.0%/);
@@ -42,7 +42,7 @@ test('panel labels cannot inject terminal controls or unbounded strings', () => 
 test('tables fit terminal cells, align numeric columns and only graph wide model rows', () => {
   const items = [{ name: 'light', count: 2, percent: 20 }, { name: 'heavy', count: 100, percent: 80 }];
   for (const width of [8, 18, 24, 32, 48, 56]) {
-    const rows = tableRows([...items, { name: '界🧭é'.repeat(100), count: 1, percent: 0 }], width, { bars: true });
+    const rows = tableRows([...items, { name: '界🧭é'.repeat(100), count: 1, percent: 0 }], width, { bar: 'model' });
     for (const row of rows) for (const line of row.text.split('\n')) assert.ok(cellWidth(line) <= width, `${width}: ${line}`);
     assert.equal(rows.some(row => row.text.includes('━')), width >= 48);
   }
@@ -53,8 +53,15 @@ test('tables fit terminal cells, align numeric columns and only graph wide model
   assert.equal(fitLabel('ééé', 2), 'é…');
   const rendered = panelRows(ready, 'session', true, 56);
   assert.equal(rendered.filter(row => row.text.includes('━')).length, 1);
-  assert.equal(rendered.find(row => row.text === 'Fallback: 1').tone, 'warning');
-  assert.deepEqual(scopeTabs('all', 30).map(tab => tab.active), [false, true]);
+  assert.equal(rendered.find(row => /Fallback\s+1/.test(row.text)).tone, 'warning');
+  // Fixed grid: every numeric row keeps its percent at the same cell, and
+  // section rules are distinct while sub-profiles sit on the same columns.
+  const pct = rendered.filter(row => /%/.test(row.text)).map(row => row.text.indexOf('%'));
+  assert.ok(pct.length > 1 && pct.every(i => i === pct[0]), `percent columns: ${pct.join(',')}`);
+  assert.ok(rendered.some(row => /^└ /.test(row.text)));
+  for (const [mark, title] of [['═', 'ИТОГ'], ['─', 'МОДЕЛИ'], ['┄', 'EFFORT'], ['┈', 'АГЕНТЫ']]) {
+    assert.ok(rendered.some(row => row.text.includes(mark) && row.text.includes(title)));
+  }  assert.deepEqual(scopeTabs('all', 30).map(tab => tab.active), [false, true]);
   assert.match(scopeTabs('all', 30)[1].text, /^▸/);
 });
 

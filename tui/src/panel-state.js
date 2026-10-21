@@ -1,5 +1,5 @@
 // Presentation only: aggregation belongs to stats.js.
-import { tableRows } from './panel-presentation.js';
+import { tableRows, tableGrid, sectionRule, summaryLine } from './panel-presentation.js';
 const errors = {
   off: 'Decision Router выключен',
   'config-missing': 'Конфиг не найден',
@@ -13,17 +13,30 @@ export function panelRows(state, scope, hasSession = true, width = 56) {
   if (state.status !== 'ready') return [row(errors[state.status] ?? 'Не удалось прочитать статистику', 'warning')];
   if (scope === 'session' && !hasSession) return [row('Нет текущей сессии. Tab — весь журнал.')];
   const summary = state[scope];
-  const rows = [row('ИТОГ', 'heading'), row(`Успешно: ${summary.successful}`, 'base'),
-    row(`Fallback: ${summary.fallback}`, summary.fallback ? 'warning' : 'muted'),
-    row('Доли — от успешных решений.')];
+  // One shared grid: the same count/percent/bar columns in every section.
+  const gridItems = [...summary.models, ...summary.profiles,
+    ...summary.agents, ...summary.agents.flatMap(agent => agent.profiles)];
+  const { countWidth } = tableGrid(gridItems.length ? gridItems : [{ count: 0 }], width);
+  const rules = { итог: '═', модели: '─', effort: '┄', агенты: '┈' };
+  const heading = (title, fill) => [row(''), row(sectionRule(title, fill, width), 'heading')];
+  const rows = [];
+  rows.push(...heading('ИТОГ', rules.итог),
+    row(summaryLine('Успешно', summary.successful, width, countWidth), 'base'),
+    row(summaryLine('Fallback', summary.fallback, width, countWidth), summary.fallback ? 'warning' : 'muted'),
+    row('Доли — от успешных решений.'));
   if (!summary.successful) rows.push(row('Успешных решений пока нет.'));
   else {
-    const heading = (title) => [row(''), row(title, 'heading')];
-    rows.push(...heading('МОДЕЛИ'), ...tableRows(summary.models, width, { bars: true }),
-      ...heading('EFFORT · модель / профиль'), ...tableRows(summary.profiles, width), ...heading('АГЕНТЫ'));
-    const countWidth = Math.max(1, ...summary.agents.map(agent => String(agent.count).length));
+    const items = grid => tableRows(grid.items, width, { countWidth, nameWidth: grid.nameWidth, bar: grid.bar });
+    const { nameWidth } = tableGrid(gridItems, width);
+    rows.push(...heading('МОДЕЛИ', rules.модели),
+      ...items({ items: summary.models, nameWidth, bar: 'model' }),
+      ...heading('EFFORT · модель / профиль', rules.effort),
+      ...items({ items: summary.profiles, nameWidth, bar: 'effort' }),
+      ...heading('АГЕНТЫ', rules.агенты));
     for (const agent of summary.agents) {
-      rows.push(...tableRows([agent], width, { countWidth }), ...tableRows(agent.profiles, width, { indent: '  ', countWidth }));
+      rows.push(...items({ items: [agent], nameWidth, bar: 'agent' }));
+      // Sub-profiles: fixed 2-cell indent («└»), columns stay on the grid.
+      rows.push(...tableRows(agent.profiles, width, { countWidth, nameWidth, indent: '└', bar: 'effort' }));
     }
     rows.push(row('Доли профилей — внутри агента.'));
   }
