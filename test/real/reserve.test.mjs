@@ -2,10 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { initBudget, reserveAttempt, finalizeAttempt, acknowledgeUnknownReserve, budgetStatus } from './ledger.mjs';
 
 test('authorized reserve survives reload, preserves history and cannot be replaced or reset; future unknown blocks', async () => {
-  const dir = await mkdtemp('/tmp/opencode/reserve-');
+  const dir = await mkdtemp(join(tmpdir(), 'decision-router-reserve-'));
   const file = join(dir, 'ledger.json');
   await initBudget({ file });
   const token = await reserveAttempt({ file });
@@ -29,7 +30,7 @@ test('authorized reserve survives reload, preserves history and cannot be replac
 });
 
 test('authorized reserve counts toward cap and requires explicit valid amount/reason/attempt', async () => {
-  const dir = await mkdtemp('/tmp/opencode/reserve-');
+  const dir = await mkdtemp(join(tmpdir(), 'decision-router-reserve-'));
   const file = join(dir, 'ledger.json');
   await initBudget({ file });
   const token = await reserveAttempt({ file });
