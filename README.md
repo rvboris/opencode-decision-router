@@ -1,9 +1,11 @@
-# opencode-decision-router
+# @rvboris/opencode-decision-router
+
+[English](README.md) · [Русский](README.ru.md)
 
 OpenCode **V2 plugin** that classifies delegated subagent tasks through a
 "decisions" API (default: OpenRouter Microsoft Decision) and routes the child
-model to `omniroute/light` or `omniroute/heavy`. Zero dependencies, JS ESM,
-Node >= 18.
+model to `omniroute/light` or `omniroute/heavy`. No server runtime dependencies (the TUI uses host-provided peer dependencies),
+JS ESM, Node >= 18. Install from npm with `npm install @rvboris/opencode-decision-router`.
 
 **V2 only.** Local mock integration verifies native delegation on OpenCode
 2.0.28, including foreground, background and same-session resume. The installed
@@ -80,15 +82,24 @@ Run `node scripts/integration.mjs` for the isolated loopback-only matrix, or
 `node --test test/integration/*.test.mjs` for transport fixtures. All built-in MCPs,
 including `gh_grep`, are disabled in the scratch OMO config.
 
-## Opt-in installation
+## Installation and opt-in
+
+Install the public package into the environment used by OpenCode:
+
+```sh
+npm install @rvboris/opencode-decision-router
+```
 
 Routing is **disabled by default**. Load the V2 plugin directly from the
-absolute repository directory in the OpenCode `plugins` array (do not add a
-wrapper module):
+absolute installed package directory in the OpenCode `plugins` array (do not add a
+wrapper module). The npm package directory is typically
+`node_modules/@rvboris/opencode-decision-router`; resolve it to an absolute path.
+The plugin remains disabled unless `OPENCODE_DECISION_ROUTER_CONFIG` points to a
+valid, enabled JSON file:
 
 ```jsonc
 {
-  "plugins": ["/absolute/path/to/opencode-decision-router"]
+  "plugins": ["/absolute/path/to/node_modules/@rvboris/opencode-decision-router"]
 }
 ```
 
@@ -241,12 +252,30 @@ Indicator formatting and injected read/session-state logic live in
 `tui/src/format.js` and `tui/src/read-state.js`, covered by
 `test/unit/tui-format.test.js` and `test/unit/tui-read-state.test.js`.
 
-## Tests
+## Tests and release
+
+Portable, offline tests and package verification (Node.js 18+, Bun for the TUI build):
 
 ```sh
-npm test        # node --test test/unit/*.test.js
+npm ci
+cd tui && bun install --frozen-lockfile && bun run build && cd ..
+env -u OPENCODE_DECISION_ROUTER_CONFIG npm test
+npm run test:pack
 ```
 
-Unit tests only (config, policy, client, router), using injected fakes and
-loopback HTTP servers. **No real API calls are made and no integration or
-OMO-compatibility claims are made by this suite.**
+`npm test` runs unit, local loopback integration, and fixture/runner tests only. It
+does not contact paid APIs or require an installed OpenCode/OMO environment. The
+separate `scripts/integration.mjs` mock host matrix and
+`scripts/real-validation.mjs` real-API validation are not part of portable CI.
+The package check creates a real tarball and imports the unpacked server exports.
+
+Releases use Release Please on `main`: conventional commits update a release PR
+with the version, changelog, and manifest. CI validates that PR; merge it to create
+a GitHub Release, which alone triggers npm publishing with provenance via GitHub
+OIDC. Configure npm Trusted Publishing manually before release: on npmjs.com,
+open the package's **Publishing access** settings and add a GitHub Actions trusted
+publisher with owner `rvboris`, repository `opencode-decision-router`, workflow
+`.github/workflows/release-please.yml`, and environment (none). Grant the GitHub
+Actions workflow `contents: write`, `pull-requests: write` for Release Please and
+`id-token: write` for npm publishing. No npm token secret is used. The first push
+does not publish; only a Release Please-created release does.

@@ -1,9 +1,8 @@
 {
-  "name": "opencode-decision-router",
+  "name": "@rvboris/opencode-decision-router",
   "version": "0.1.0",
-  "private": true,
   "type": "module",
-  "description": "OpenCode V2 plugin: classifies delegated subagent tasks (light/heavy) via a decisions API and routes the child model accordingly. Opt-in via OPENCODE_DECISION_ROUTER_CONFIG.",
+  "description": "Opt-in OpenCode V2 delegated-task routing with model/effort profiles and a TUI indicator.",
   "main": "src/index.js",
   "exports": {
     ".": "./src/index.js",
@@ -14,7 +13,59 @@
     "node": ">=18"
   },
   "scripts": {
-    "test": "node --test test/unit/*.test.js"
+    "build": "npm --prefix tui run build",
+    "test": "node --test test/unit/*.test.js test/integration/*.test.mjs test/real/*.test.mjs",
+    "test:unit": "node --test test/unit/*.test.js",
+    "test:pack": "node scripts/pack-test.mjs",
+    "prepack": "npm run build"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "author": "rvboris",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rvboris/opencode-decision-router.git"
+  },
+  "homepage": "https://github.com/rvboris/opencode-decision-router#readme",
+  "bugs": {
+    "url": "https://github.com/rvboris/opencode-decision-router/issues"
+  },
+  "keywords": [
+    "opencode",
+    "opencode-plugin",
+    "routing",
+    "tui"
+  ],
+  "files": [
+    "index.js",
+    "src/*.js",
+    "tui/dist/*.js",
+    "examples/*.json",
+    "LICENSE",
+    "README.md",
+    "README.ru.md",
+    "VALIDATION.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "peerDependencies": {
+    "@opencode/plugin": "^2.0.22",
+    "@opentui/core": "^0.5.14",
+    "@opentui/solid": "^0.5.14",
+    "solid-js": "^1.9.12"
+  },
+  "peerDependenciesMeta": {
+    "@opencode/plugin": {
+      "optional": true
+    },
+    "@opentui/core": {
+      "optional": true
+    },
+    "@opentui/solid": {
+      "optional": true
+    },
+    "solid-js": {
+      "optional": true
+    }
+  }
 }

@@ -1,0 +1,47 @@
+name: Reusable Test
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: Git ref to checkout for validation
+        required: false
+        type: string
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
+      - name: Set up Bun (TUI build)
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Install TUI dependencies
+        run: bun install --frozen-lockfile
+        working-directory: tui
+
+      - name: Build TUI bundle
+        run: npm run build
+
+      - name: Offline tests
+        run: env -u OPENCODE_DECISION_ROUTER_CONFIG npm test
+
+      - name: Package check (npm pack + unpacked imports)
+        run: npm run test:pack
